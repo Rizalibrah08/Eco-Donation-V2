@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import ConfirmModal from '../components/ConfirmModal';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +24,9 @@ export default function SetorScreen() {
   ]);
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const availableCategories = Object.keys(RATES);
 
@@ -50,7 +54,7 @@ export default function SetorScreen() {
     }, 0);
   }, [categories]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!address.trim()) {
       Alert.alert('Error', 'Silakan isi alamat penjemputan.');
       return;
@@ -65,6 +69,17 @@ export default function SetorScreen() {
       return;
     }
 
+    const totalWeight = items.reduce((sum, item) => sum + item.estimated_weight, 0);
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    setShowConfirmModal(false);
+    
+    const items = categories
+      .filter(c => parseFloat(c.weight) > 0)
+      .map(c => ({ category: c.name, estimated_weight: parseFloat(c.weight) }));
+
     setLoading(true);
     try {
       await api.post('/pickups', {
@@ -73,11 +88,10 @@ export default function SetorScreen() {
         items
       });
       
-      Alert.alert('Sukses', 'Permintaan penjemputan berhasil dibuat. Kurir akan segera menuju lokasimu!', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/riwayat') }
-      ]);
+      setSuccessMessage('Permintaan penjemputan berhasil dibuat. Kurir akan segera menuju lokasimu!');
+      setShowSuccessModal(true);
     } catch (error: any) {
-      Alert.alert('Gagal', error.response?.data?.message || 'Terjadi kesalahan server');
+      Alert.alert('Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan server');
     } finally {
       setLoading(false);
     }
@@ -171,6 +185,44 @@ export default function SetorScreen() {
         </TouchableOpacity>
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Custom Success Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showSuccessModal}
+        onRequestClose={() => {
+          setShowSuccessModal(false);
+          router.replace('/(tabs)/riwayat');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.successIconContainer}>
+              <Ionicons name="checkmark-circle" size={60} color="#00bfa5" />
+            </View>
+            <Text style={styles.modalTitle}>Sukses</Text>
+            <Text style={styles.modalMessage}>{successMessage}</Text>
+            <TouchableOpacity 
+              style={styles.modalButton}
+              onPress={() => {
+                setShowSuccessModal(false);
+                router.replace('/(tabs)/riwayat');
+              }}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <ConfirmModal
+        visible={showConfirmModal}
+        title="Konfirmasi Penjemputan"
+        message={`Anda akan menyetorkan ${categories.filter(c => parseFloat(c.weight) > 0).length} jenis barang (Total: ${categories.reduce((sum, c) => sum + (parseFloat(c.weight) || 0), 0)} Kg).\nEstimasi Poin: +${estimatedPoints.toLocaleString('id-ID')}\n\nLanjutkan?`}
+        onConfirm={handleConfirmSubmit}
+        onCancel={() => setShowConfirmModal(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -309,6 +361,53 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   submitBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 25,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  successIconContainer: {
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  modalButton: {
+    backgroundColor: '#00bfa5',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import ConfirmModal from '../../components/ConfirmModal';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import QRCode from 'react-native-qrcode-svg';
+import QRCodeDisplay from '../../components/QRCodeDisplay';
 import api from '../../services/api';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -12,6 +14,7 @@ export default function TaskDetailScreen() {
   const [task, setTask] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   
   // State for actual weights input
   const [actualWeights, setActualWeights] = useState<Record<string, string>>({});
@@ -26,8 +29,10 @@ export default function TaskDetailScreen() {
       const response = await api.get(`/pickups/${id}`);
       setTask(response.data);
       
-      // If QR already generated (status might be on_the_way and weights inputted)
-      // Usually we generate QR on the fly after inputting weight
+      if (response.data.status === 'pending_verification') {
+        const qrResponse = await api.get(`/pickups/${id}/qr`);
+        setQrToken(qrResponse.data.qr_payload);
+      }
     } catch (error) {
       Alert.alert('Error', 'Gagal memuat tugas.');
       router.back();
@@ -36,10 +41,17 @@ export default function TaskDetailScreen() {
     }
   };
 
-  const handleAcceptTask = async () => {
+  const handleAcceptTask = () => {
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmAccept = async () => {
+    setShowConfirmModal(false);
     setProcessing(true);
     try {
-      await api.patch(`/pickups/${id}/status`, { status: 'on_the_way' });
+      const { user } = useAuthStore.getState();
+      await api.patch(`/pickups/${id}/status`, { status: 'on_the_way', courier_id: user?.id });
+      Alert.alert('Sukses', 'Tugas berhasil diterima! Segera menuju lokasi pengguna.');
       fetchTaskDetail(); // Refresh data
     } catch (error) {
       Alert.alert('Gagal', 'Tidak dapat menerima tugas.');
@@ -103,7 +115,7 @@ export default function TaskDetailScreen() {
           <View style={styles.qrContainer}>
             <Text style={styles.qrTitle}>Tunjukkan QR ini ke Pengguna</Text>
             <View style={styles.qrCodeBox}>
-              <QRCode
+              <QRCodeDisplay
                 value={qrToken}
                 size={220}
                 color="black"
@@ -113,6 +125,12 @@ export default function TaskDetailScreen() {
             <Text style={styles.qrInstruction}>
               Pengguna perlu melakukan scan melalui User App untuk memverifikasi berat dan mencairkan Poin.
             </Text>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: '#1565c0', width: '100%', marginTop: 20 }]} 
+              onPress={() => router.replace('/(tabs)')}
+            >
+              <Text style={styles.actionButtonText}>Kembali ke Daftar Tugas</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
@@ -131,7 +149,7 @@ export default function TaskDetailScreen() {
                 <Ionicons name="location" size={20} color="#1565c0" style={styles.infoIcon} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.infoLabel}>Alamat</Text>
-                  <Text style={styles.infoValue}>{task.address}</Text>
+                  <Text style={styles.infoValue}>{task.pickup_address}</Text>
                 </View>
               </View>
 
@@ -139,8 +157,12 @@ export default function TaskDetailScreen() {
                 <Ionicons name="information-circle" size={20} color="#1565c0" style={styles.infoIcon} />
                 <View>
                   <Text style={styles.infoLabel}>Status</Text>
-                  <Text style={[styles.infoValue, { color: task.status === 'on_the_way' ? '#e65100' : '#1565c0' }]}>
-                    {task.status === 'waiting' ? 'Menunggu Penjemputan' : 'Kurir Menuju Lokasi'}
+                  <Text style={[styles.infoValue, { 
+                    color: task.status === 'on_the_way' ? '#e65100' : 
+                           task.status === 'pending_verification' ? '#ffb300' : '#1565c0' 
+                  }]}>
+                    {task.status === 'waiting' ? 'Menunggu Penjemputan' : 
+                     task.status === 'pending_verification' ? 'Menunggu User Scan QR' : 'Kurir Menuju Lokasi'}
                   </Text>
                 </View>
               </View>
@@ -199,6 +221,15 @@ export default function TaskDetailScreen() {
           ) : null}
         </View>
       )}
+
+      <ConfirmModal
+        visible={showConfirmModal}
+        title="Konfirmasi"
+        message="Apakah Anda yakin ingin menerima tugas ini?"
+        confirmText="Terima Tugas"
+        onConfirm={handleConfirmAccept}
+        onCancel={() => setShowConfirmModal(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

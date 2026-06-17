@@ -51,7 +51,9 @@ router.get('/', (req, res) => {
 // Get single pickup
 router.get('/:id', (req, res) => {
   const db = req.app.locals.db;
-  db.get('SELECT * FROM pickup_orders WHERE id = ?', [req.params.id], (err, order) => {
+  db.get(`SELECT po.*, u.name as user_name FROM pickup_orders po
+    JOIN users u ON po.user_id = u.id
+    WHERE po.id = ?`, [req.params.id], (err, order) => {
     if (!order) return res.status(404).json({ error: 'Not found' });
     db.all('SELECT * FROM pickup_items WHERE order_id = ?', [order.id], (err, items) => {
       order.items = items || [];

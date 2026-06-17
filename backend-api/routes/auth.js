@@ -14,7 +14,8 @@ router.post('/register', (req, res) => {
     [name, email, hash(password), phone || null],
     function(err) {
       if (err) return res.status(400).json({ error: 'Email already exists' });
-      res.json({ id: this.lastID, name, email });
+      const user = { id: this.lastID, name, email, points: 0 };
+      res.json({ user, token: `token_${this.lastID}_${Date.now()}` });
     });
 });
 

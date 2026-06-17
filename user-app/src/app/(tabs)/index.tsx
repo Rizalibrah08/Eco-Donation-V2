@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -9,29 +9,37 @@ import api from '../../services/api';
 export default function HomeScreen() {
   const router = useRouter();
   const { user, updateUserPoints } = useAuthStore();
+  const [activePickup, setActivePickup] = React.useState<any>(null);
 
-  // Fetch updated user data (points) on mount
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        if (user) {
-          const response = await api.get(`/users/${user.id}`);
-          if (response.data?.points !== undefined) {
-            updateUserPoints(response.data.points);
+  // Fetch updated user data (points) when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const fetchUserData = async () => {
+        try {
+          if (user) {
+            const response = await api.get(`/users/${user.id}`);
+            if (response.data?.points !== undefined) {
+              updateUserPoints(response.data.points);
+            }
+            
+            // Fetch active pickup
+            const pickupsResponse = await api.get(`/pickups?user_id=${user.id}`);
+            const active = pickupsResponse.data.find((p: any) => p.status === 'on_the_way' || p.status === 'pending_verification');
+            setActivePickup(active);
           }
+        } catch (error) {
+          console.error('Failed to fetch user points', error);
         }
-      } catch (error) {
-        console.error('Failed to fetch user points', error);
-      }
-    };
-    fetchUserData();
-  }, [user?.id]);
+      };
+      fetchUserData();
+    }, [user?.id])
+  );
 
   const quickActions = [
     { id: 'setor', title: 'Setor Sampah', icon: 'leaf-outline', color: '#00bfa5', route: '/setor' },
     { id: 'donasi', title: 'Salurkan Donasi', icon: 'heart-outline', color: '#ff5252', route: '/(tabs)/katalog' },
-    { id: 'lacak', title: 'Lacak Kurir', icon: 'bicycle-outline', color: '#ffb300', route: '/(tabs)/riwayat' },
     { id: 'scan', title: 'Verifikasi Kurir', icon: 'qr-code-outline', color: '#448aff', route: '/scan' },
+    { id: 'peringkat', title: 'Papan Peringkat', icon: 'trophy-outline', color: '#ffb300', route: '/(tabs)/profil' },
   ];
 
   return (
@@ -77,6 +85,28 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {activePickup && (
+          <TouchableOpacity 
+            style={styles.bannerContainer}
+            onPress={() => router.push(`/pickup-detail`)}
+          >
+            <LinearGradient
+              colors={['#fff3e0', '#ffe0b2']}
+              style={styles.banner}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.bannerTextContainer}>
+                <Text style={[styles.bannerTitle, { color: '#e65100' }]}>Ada Penjemputan Aktif!</Text>
+                <Text style={[styles.bannerDesc, { color: '#ef6c00' }]}>
+                  {activePickup.status === 'on_the_way' ? 'Kurir sedang menuju ke lokasimu.' : 'Kurir menunggu verifikasi QR darimu.'}
+                </Text>
+              </View>
+              <Ionicons name="bicycle" size={40} color="#e65100" style={styles.bannerIcon} />
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.bannerContainer}>
           <LinearGradient

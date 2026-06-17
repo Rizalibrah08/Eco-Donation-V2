@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import api from '../../services/api';
@@ -11,6 +11,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
 
@@ -26,11 +27,10 @@ export default function RegisterScreen() {
       const response = await api.post('/auth/register', { name, email, password, role: 'user' });
       const { user, token } = response.data;
       
-      Alert.alert('Sukses', 'Pendaftaran berhasil!');
       login(user, token);
-      router.replace('/(tabs)');
+      setShowSuccessModal(true);
     } catch (error: any) {
-      Alert.alert('Pendaftaran Gagal', error.response?.data?.message || 'Terjadi kesalahan pada server');
+      Alert.alert('Pendaftaran Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
     } finally {
       setLoading(false);
     }
@@ -115,6 +115,38 @@ export default function RegisterScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Custom Success Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showSuccessModal}
+        onRequestClose={() => {
+          setShowSuccessModal(false);
+          router.replace('/(tabs)');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.successIconContainer}>
+              <Ionicons name="checkmark-circle" size={60} color="#00bfa5" />
+            </View>
+            <Text style={styles.modalTitle}>Selamat Datang!</Text>
+            <Text style={styles.modalMessage}>
+              Pendaftaran berhasil. Mari mulai perjalanan donasimu bersama Eco-Donation.
+            </Text>
+            <TouchableOpacity 
+              style={styles.modalButton}
+              onPress={() => {
+                setShowSuccessModal(false);
+                router.replace('/(tabs)');
+              }}
+            >
+              <Text style={styles.modalButtonText}>Mulai</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -219,6 +251,53 @@ const styles = StyleSheet.create({
   loginLink: {
     color: '#00bfa5',
     fontSize: 14,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 25,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  successIconContainer: {
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  modalButton: {
+    backgroundColor: '#00bfa5',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });

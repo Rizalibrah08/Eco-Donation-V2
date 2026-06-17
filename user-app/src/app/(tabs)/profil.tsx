@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import ConfirmModal from '../../components/ConfirmModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useRouter } from 'expo-router';
@@ -35,6 +36,7 @@ export default function ProfilScreen() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [distribution, setDistribution] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -58,6 +60,11 @@ export default function ProfilScreen() {
   }, [user]);
 
   const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
     logout();
     router.replace('/(auth)/login');
   };
@@ -269,6 +276,16 @@ export default function ProfilScreen() {
 
         <View style={{ height: 100 }} />
       </View>
+
+      <ConfirmModal
+        visible={showLogoutModal}
+        title="Konfirmasi Keluar"
+        message="Apakah Anda yakin ingin keluar dari akun ini?"
+        confirmText="Keluar"
+        isDestructive={true}
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setShowLogoutModal(false)}
+      />
     </ScrollView>
   );
 }

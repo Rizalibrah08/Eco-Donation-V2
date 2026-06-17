@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import ConfirmModal from '../../components/ConfirmModal';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +16,9 @@ export default function CampaignDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [donateAmount, setDonateAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [donatedAmount, setDonatedAmount] = useState(0);
 
   useEffect(() => {
     if (id) fetchCampaignDetail();
@@ -45,7 +49,14 @@ export default function CampaignDetailScreen() {
       return;
     }
 
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmDonate = async () => {
+    setShowConfirmModal(false);
     setIsSubmitting(true);
+    const amount = parseInt(donateAmount.replace(/\D/g, ''), 10);
+    
     try {
       await api.post('/donations', {
         user_id: user?.id,
@@ -53,16 +64,14 @@ export default function CampaignDetailScreen() {
         points: amount
       });
       
-      // Update local state points
       if (user) {
         updateUserPoints(user.points - amount);
       }
 
-      Alert.alert('Donasi Berhasil!', `Terima kasih telah berdonasi sebesar Rp ${amount.toLocaleString('id-ID')}.`, [
-        { text: 'Selesai', onPress: () => router.back() }
-      ]);
+      setDonatedAmount(amount);
+      setShowSuccessModal(true);
     } catch (error: any) {
-      Alert.alert('Donasi Gagal', error.response?.data?.message || 'Terjadi kesalahan');
+      Alert.alert('Donasi Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan');
     } finally {
       setIsSubmitting(false);
     }
@@ -159,6 +168,46 @@ export default function CampaignDetailScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Custom Success Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showSuccessModal}
+        onRequestClose={() => {
+          setShowSuccessModal(false);
+          router.back();
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.successIconContainer}>
+              <Ionicons name="checkmark-circle" size={60} color="#00bfa5" />
+            </View>
+            <Text style={styles.modalTitle}>Donasi Berhasil!</Text>
+            <Text style={styles.modalMessage}>
+              Terima kasih telah berdonasi sebesar Rp {donatedAmount.toLocaleString('id-ID')}.
+            </Text>
+            <TouchableOpacity 
+              style={styles.modalButton}
+              onPress={() => {
+                setShowSuccessModal(false);
+                router.back();
+              }}
+            >
+              <Text style={styles.modalButtonText}>Selesai</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <ConfirmModal
+        visible={showConfirmModal}
+        title="Konfirmasi Donasi"
+        message={`Anda akan mendonasikan Rp ${(parseInt(donateAmount.replace(/\D/g, ''), 10) || 0).toLocaleString('id-ID')} (${parseInt(donateAmount.replace(/\D/g, ''), 10) || 0} Poin) ke kampanye "${campaign.title}".\n\nLanjutkan?`}
+        onConfirm={handleConfirmDonate}
+        onCancel={() => setShowConfirmModal(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -350,6 +399,53 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   donateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 25,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  successIconContainer: {
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  modalButton: {
+    backgroundColor: '#00bfa5',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

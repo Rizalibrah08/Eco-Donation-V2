@@ -21,12 +21,12 @@ export default function CourierLoginScreen() {
     setLoading(true);
     try {
       const response = await api.post('/auth/courier/login', { email, password });
-      const { user, token } = response.data;
+      const { courier, user, token } = response.data;
       
-      login(user, token);
+      login(courier || user, token);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Gagal', error.response?.data?.message || 'Terjadi kesalahan pada server');
+      Alert.alert('Login Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -11,9 +11,11 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
 
-  useEffect(() => {
-    fetchTasks();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchTasks();
+    }, [])
+  );
 
   const fetchTasks = async () => {
     try {
@@ -34,16 +36,23 @@ export default function DashboardScreen() {
     >
       <View style={styles.cardHeader}>
         <Text style={styles.orderId}>Order #{item.id}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: item.status === 'waiting' ? '#fff3e0' : '#e3f2fd' }]}>
-          <Text style={[styles.statusText, { color: item.status === 'waiting' ? '#e65100' : '#1565c0' }]}>
-            {item.status === 'waiting' ? 'Baru' : 'Diambil'}
+        <View style={[styles.statusBadge, { 
+          backgroundColor: item.status === 'waiting' ? '#fff3e0' : 
+                          item.status === 'pending_verification' ? '#fff8e1' : '#e3f2fd' 
+        }]}>
+          <Text style={[styles.statusText, { 
+            color: item.status === 'waiting' ? '#e65100' : 
+                   item.status === 'pending_verification' ? '#ffb300' : '#1565c0' 
+          }]}>
+            {item.status === 'waiting' ? 'Baru' : 
+             item.status === 'pending_verification' ? 'Menunggu Scan QR' : 'Diambil'}
           </Text>
         </View>
       </View>
       
       <View style={styles.infoRow}>
         <Ionicons name="location-outline" size={20} color="#666" />
-        <Text style={styles.infoText} numberOfLines={2}>{item.address}</Text>
+        <Text style={styles.infoText} numberOfLines={2}>{item.pickup_address}</Text>
       </View>
       
       <View style={styles.infoRow}>

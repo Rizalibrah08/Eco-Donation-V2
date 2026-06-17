@@ -24,16 +24,10 @@ export default function LoginScreen() {
       const response = await api.post('/auth/login', { email, password });
       const { user, token } = response.data;
       
-      // Ensure only users can login to user-app
-      if (user.role === 'courier') {
-         Alert.alert('Akses Ditolak', 'Akun ini adalah akun kurir. Silakan gunakan Courier App.');
-         return;
-      }
-      
       login(user, token);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Gagal', error.response?.data?.message || 'Terjadi kesalahan pada server');
+      Alert.alert('Login Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
     } finally {
       setLoading(false);
     }

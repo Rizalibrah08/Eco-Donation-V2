@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import ConfirmModal from '../../components/ConfirmModal';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,8 +8,14 @@ import { Ionicons } from '@expo/vector-icons';
 export default function CourierProfileScreen() {
   const { user, logout } = useAuthStore();
   const router = useRouter();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
     logout();
     router.replace('/(auth)/login');
   };
@@ -34,6 +41,16 @@ export default function CourierProfileScreen() {
           <Text style={styles.logoutText}>Keluar Akun</Text>
         </TouchableOpacity>
       </View>
+
+      <ConfirmModal
+        visible={showLogoutModal}
+        title="Konfirmasi Keluar"
+        message="Apakah Anda yakin ingin keluar dari akun kurir Anda?"
+        confirmText="Keluar"
+        isDestructive={true}
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setShowLogoutModal(false)}
+      />
     </View>
   );
 }
