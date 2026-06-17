@@ -1,0 +1,295 @@
+Berikut adalah rincian tata letak dan alur fitur untuk setiap halamannya:
+
+
+
+1. Halaman Beranda (Home Dashboard)
+
+Pusat kendali utama yang bersih dan langsung menunjukkan saldo serta menu utama.
+
+
+
+Top Header: Latar belakang solid (misal: hijau zamrud atau biru bersih). Terdapat teks sapaan "Halo, Satrio!" di kiri atas, serta ikon profil dan lonceng notifikasi di kanan atas.
+
+
+
+Main Card (Kartu Utama): Melayang (floating) sedikit di bawah header. Menampilkan "Saldo Poin Donasi" dengan angka yang besar dan jelas, dilengkapi estimasi nilai Rupiah di bawahnya.
+
+
+
+Quick Action Icons (Menu Cepat): Deretan ikon melingkar (grid 2x2 atau baris horizontal) di bawah kartu utama:
+
+
+
+📦 Setor Sampah (Masuk ke alur input & kalkulator)
+
+
+
+🤝 Salurkan Donasi (Masuk ke katalog panti asuhan/kampanye)
+
+
+
+🚚 Lacak Kurir (Melihat status penjemputan aktif)
+
+
+
+🏆 Papan Peringkat (Leaderboard komunitas)
+
+
+
+Ongoing Activity Banner: Banner interaktif yang muncul dinamis. Misal: "Kurir sedang menuju lokasimu (Estimasi 15 Menit) - Lihat Peta".
+
+
+
+Bottom Navigation Bar: Beranda | Katalog | Riwayat | Profil.
+
+
+
+2. Halaman Setor Sampah (Input & Kalkulator)
+
+Mengadopsi alur selangkah demi selangkah (step-by-step) yang rapi.
+
+
+
+Pilih Kategori Sampah (Multi-Select): Deretan kartu kecil di mana pengguna bisa memilih lebih dari satu jenis sampah dalam sekali setor. Kategori yang tersedia: Botol Plastik, Kertas, Kaleng, dan Botol Kaca.
+
+
+
+Input Volume Dinamis: Form input bersih yang muncul sesuai kategori yang dipilih. Pengguna memasukkan estimasi berat (Kg) atau jumlah barang untuk masing-masing kategori.
+
+
+
+Auto-Conversion Text: Teks hijau yang muncul secara real-time di bawah input: "Estimasi: +1.500 Poin Donasi".
+
+
+
+Pilih Titik Jemput: Dropdown lokasi tersimpan (Rumah, Kampus, Kos) atau tambah via Maps.
+
+
+
+Pilih Jadwal: Slider/tombol kalender pintar ("Hari ini 14:00", "Besok Pagi"). Terdapat label "Rute Efisien" jika jadwal searah dengan rute pengguna lain.
+
+
+
+Tombol Konfirmasi: Tombol besar di paling bawah: "Konfirmasi Penjemputan".
+
+
+
+3. Alur Verifikasi Penjemputan (Sistem Anti-Fraud)
+
+Untuk mencegah kecurangan berat sampah antara pengguna dan kurir, diterapkan alur wajib verifikasi on-the-spot:
+
+
+
+Langkah 1: Kurir tiba di lokasi membawa timbangan digital (SOP Wajib).
+
+
+
+Langkah 2: Kurir menimbang sampah secara langsung di depan pengguna untuk mengetahui berat aktual (misal: estimasi awal user 5 kg, ternyata aktualnya 1,2 kg).
+
+
+
+Langkah 3: Kurir memasukkan angka aktual (1,2 kg) di aplikasi versi Kurir. Sistem kurir akan meng-generate sebuah QR Code.
+
+
+
+Langkah 4: Pengguna membuka Eco-Donation Assistant, menekan tombol "Scan QR Kurir", dan memindai QR tersebut.
+
+
+
+Hasil (Validasi & Pencairan): Scan QR berfungsi sebagai "Tanda Tangan Digital" persetujuan berat aktual. Setelah scan berhasil, barulah poin donasi dikonversi berdasarkan berat 1,2 kg dan langsung cair ke saldo pengguna.
+
+
+
+4. Halaman Katalog Donasi (Campaign & Charity)
+
+Menampilkan daftar dengan visual menarik ala fitur "Sukha/Promo".
+
+
+
+Search & Filter: Search bar di atas, diikuti chips/pills filter (Pendidikan, Lingkungan, Bencana Alam, Panti Asuhan).
+
+
+
+Campaign Cards: List view vertikal. Setiap kartu berisi:
+
+
+
+Gambar thumbnail kampanye.
+
+
+
+Judul (misal: "Buku untuk Pesisir").
+
+
+
+Progress Bar (misal: Terkumpul 80% dari target Rp10.000.000).
+
+
+
+Tombol "Donasi Sekarang" di sudut kanan bawah.
+
+
+
+Halaman Detail: Muncul saat kartu diklik. Berisi deskripsi lengkap, transparansi dana, dan slider untuk menentukan jumlah Poin yang ingin disumbangkan.
+
+
+
+5. Halaman Riwayat & Lacak (History & Tracking)
+
+Fokus pada transparansi transaksi.
+
+
+
+Tab Atas: Terbagi dua: "Dalam Proses" dan "Selesai".
+
+
+
+Dalam Proses: Menampilkan mini map pelacakan kurir, atau status checklist progresif (Menunggu Kurir -> Ditimbang/Scan QR -> Selesai).
+
+
+
+Selesai (Riwayat): Daftar riwayat layaknya mutasi rekening.
+
+
+
+Teks hijau (+) untuk "Setor 2Kg Botol Plastik (Sukses)".
+
+
+
+Teks merah (-) untuk "Donasi ke Panti Asuhan (Berhasil)".
+
+
+
+6. Halaman Profil & Impact (Portfolio)
+
+Mengadopsi gaya "Portofolio Kekayaan", namun diubah menjadi "Impact Portfolio".
+
+
+
+Impact Ring/Chart: Grafik lingkaran modern di atas yang menunjukkan persentase jenis sampah yang paling sering disetor.
+
+
+
+Impact Metrics (3 Kotak):
+
+
+
+Total Sampah Diselamatkan (Kg)
+
+
+
+Jejak Karbon Berkurang (Kg CO2)
+
+
+
+Total Donasi Tersalurkan (Rp)
+
+
+
+Badges/Achievements: Rak virtual berisi lencana (misal: ikon daun perunggu, perak, emas).
+
+
+
+Menu Pengaturan: Akun, bahasa, keamanan (PIN/Biometrik), dan pusat bantuan.
+
+
+
+Berikut adalah urutan logika kerja sistem dari awal pengguna menyetor sampah hingga poin didonasikan:
+
+
+
+Fase 1: Permintaan Penjemputan (User to System)
+
+Input Multi-Kategori: Pengguna memilih satu atau beberapa kategori sampah sekaligus (Botol Plastik, Kertas, Kaleng, Botol Kaca) dan memasukkan estimasi berat/jumlah.
+
+
+
+Kalkulasi Estimasi: Sistem pusat membaca input pengguna dan mengalikan rasio poin per kategori. Sistem menampilkan "Estimasi Poin" di layar pengguna (status transaksi: Draft).
+
+
+
+Penentuan Lokasi & Waktu: Pengguna menentukan titik koordinat penjemputan dan memilih jadwal.
+
+
+
+Pembuatan Tiket: Saat pengguna menekan "Konfirmasi", sistem membuat Tiket Penjemputan (Order ID) dengan status Waiting for Courier, lalu menyebarkan notifikasi ke kurir terdekat.
+
+
+
+Fase 2: Penjemputan & Pelacakan (System to Courier to User)
+
+Penerimaan Tugas (Dispatch): Kurir menerima tugas penjemputan melalui Courier App. Status tiket berubah menjadi Courier on the Way.
+
+
+
+Live Tracking: Sistem pusat secara berkala mengambil data GPS dari perangkat kurir dan mengirimkannya ke User App agar pengguna bisa melihat pergerakan kurir di mini map.
+
+
+
+Fase 3: Verifikasi Anti-Fraud & Pencairan Poin (On-Site Verification)
+
+Ini adalah core logic untuk mencegah kecurangan (perbedaan berat estimasi vs aktual):
+
+
+
+Penimbangan Aktual: Kurir tiba di lokasi dan menimbang sampah menggunakan timbangan digital standar.
+
+
+
+Input Kurir: Kurir memasukkan berat aktual untuk masing-masing kategori ke dalam Courier App.
+
+
+
+Generate QR Code: Courier App mengirim data berat aktual ke Sistem Pusat. Sistem merespons dengan menghasilkan QR Code Dinamis (berisi Order ID dan payload data berat aktual) yang tertampil di layar HP Kurir.
+
+
+
+Digital Signature (Scan QR): Pengguna membuka User App, menekan "Scan QR Kurir", dan memindai layar HP kurir.
+
+
+
+Validasi & Eksekusi:
+
+
+
+Sistem memverifikasi kecocokan Order ID dari hasil scan pengguna.
+
+
+
+Jika valid, sistem mengubah status tiket menjadi Completed.
+
+
+
+Sistem mengonversi berat aktual menjadi poin dan menambahkannya ke Database Saldo Poin Pengguna secara real-time.
+
+
+
+Fase 4: Penyaluran Donasi (User to Charity)
+
+Pemilihan Kampanye: Pengguna menelusuri katalog donasi yang datanya ditarik secara dinamis dari Sistem Pusat.
+
+
+
+Alokasi Saldo: Pengguna memasukkan nominal poin yang ingin didonasikan. Sistem melakukan pengecekan saldo (Balance Check).
+
+
+
+Pemotongan & Konversi: Jika saldo mencukupi, sistem memotong poin pengguna dan mengonversinya ke dalam nilai Rupiah.
+
+
+
+Update Progress: Sistem menambahkan nilai Rupiah tersebut ke Progress Bar kampanye panti asuhan/charity yang dipilih. Status donasi dicatat di riwayat mutasi pengguna.
+
+
+
+Fase 5: Kalkulasi Dampak (Impact Portfolio Update)
+
+Setiap kali tiket penjemputan berstatus Completed, sistem menjalankan background task (cron job/event listener).
+
+
+
+Sistem mengakumulasikan total berat sampah (Kg) dan menjalankan rumus konversi pengurangan jejak karbon (Kg CO2).
+
+
+
+Data ini di-push kembali ke User App untuk memperbarui metrik di halaman "Impact Portfolio" pengguna, sekaligus mengecek apakah pengguna memenuhi syarat untuk membuka Lencana/Badge baru (misal: melewati pencapaian 50 Kg sampah).

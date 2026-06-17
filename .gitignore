@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.kotlin/
+*.orig.*
+
+# Metro
+.metro-health-check*
+
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# OS
+.DS_Store
+*.pem
+
+# Env
+.env*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# Generated
+app-example
+/ios
+/android
+
+# Database file (will be regenerated with npm run seed)
+backend-api/database.sqlite
+
+# Design folder - not needed for running the app
+Desain & Konteks aplikasi/
