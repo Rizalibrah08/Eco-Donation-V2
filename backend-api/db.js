@@ -41,6 +41,7 @@ function initDB() {
       pickup_address TEXT,
       scheduled_at TEXT,
       verification_token TEXT,
+      short_token TEXT,
       token_expires_at DATETIME,
       completed_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -103,6 +104,18 @@ function initDB() {
       tier TEXT DEFAULT 'bronze',
       icon TEXT,
       unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      order_id INTEGER,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`);
   });

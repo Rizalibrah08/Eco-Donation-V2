@@ -1,5 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('../middleware/authMiddleware');
 const router = express.Router();
 
 const hash = (pw) => crypto.createHash('sha256').update(pw).digest('hex');
@@ -14,7 +16,9 @@ router.post('/register', (req, res) => {
     [name, email, hash(password), phone || null],
     function(err) {
       if (err) return res.status(400).json({ error: 'Email already exists' });
-      res.json({ id: this.lastID, name, email });
+      const user = { id: this.lastID, name, email, points: 0, role: 'user' };
+      const token = jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ user, token });
     });
 });
 
@@ -28,7 +32,9 @@ router.post('/login', (req, res) => {
     [email, hash(password)],
     (err, user) => {
       if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-      res.json({ user, token: `token_${user.id}_${Date.now()}` });
+      user.role = 'user';
+      const token = jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ user, token });
     });
 });
 
@@ -42,7 +48,9 @@ router.post('/courier/login', (req, res) => {
     [email, hash(password)],
     (err, courier) => {
       if (!courier) return res.status(401).json({ error: 'Invalid credentials' });
-      res.json({ courier, token: `ctoken_${courier.id}_${Date.now()}` });
+      courier.role = 'courier';
+      const token = jwt.sign(courier, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ courier, token });
     });
 });
 

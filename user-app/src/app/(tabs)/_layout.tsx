@@ -1,9 +1,35 @@
+import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/useAuthStore';
+import { initSocketConnection, disconnectSocket } from '../../services/socketService';
+import NotificationBanner from '../../components/NotificationBanner';
 
 export default function TabLayout() {
+  const { user } = useAuthStore();
+  const [activeNotification, setActiveNotification] = useState<any>(null);
+
+  useEffect(() => {
+    if (user) {
+      initSocketConnection(user.id, (notification) => {
+        setActiveNotification(notification);
+      });
+    }
+
+    return () => {
+      disconnectSocket();
+    };
+  }, [user]);
+
   return (
-    <Tabs
+    <>
+      {activeNotification && (
+        <NotificationBanner 
+          notification={activeNotification} 
+          onDismiss={() => setActiveNotification(null)} 
+        />
+      )}
+      <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#00bfa5',
@@ -57,5 +83,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </>
   );
 }

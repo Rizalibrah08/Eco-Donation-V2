@@ -42,6 +42,8 @@ export default function RootLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="setor" />
       <Stack.Screen name="scan" />
+      <Stack.Screen name="campaign/[id]" />
+      <Stack.Screen name="pickup-detail" />
     </Stack>
   );
 }

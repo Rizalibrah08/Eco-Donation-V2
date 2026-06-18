@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useFocusEffect } from 'expo-router';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -13,10 +14,14 @@ export default function RiwayatScreen() {
   const [pickups, setPickups] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const { user } = useAuthStore();
+  const router = useRouter();
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [activeTab])
+  );
 
   const fetchData = async () => {
     if (!user) return;
@@ -38,32 +43,38 @@ export default function RiwayatScreen() {
   };
 
   const renderProses = ({ item }: { item: any }) => (
-    <View style={styles.card}>
+    <TouchableOpacity 
+      style={styles.card}
+      onPress={() => router.push({ pathname: '/pickup-detail', params: { id: item.id } })}
+    >
       <View style={styles.cardHeader}>
         <Text style={styles.orderId}>Order #{item.id}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: item.status === 'on_the_way' ? '#fff3e0' : '#e3f2fd' }]}>
-          <Text style={[styles.statusText, { color: item.status === 'on_the_way' ? '#e65100' : '#1565c0' }]}>
-            {item.status === 'on_the_way' ? 'Kurir Menuju Lokasi' : 'Menunggu Kurir'}
+        <View style={[styles.statusBadge, { backgroundColor: item.status === 'on_the_way' ? '#fff3e0' : item.status === 'pending_verification' ? '#fff8e1' : '#e3f2fd' }]}>
+          <Text style={[styles.statusText, { color: item.status === 'on_the_way' ? '#e65100' : item.status === 'pending_verification' ? '#ffb300' : '#1565c0' }]}>
+            {item.status === 'on_the_way' ? 'Kurir Menuju Lokasi' : item.status === 'pending_verification' ? 'Menunggu Verifikasi QR' : 'Menunggu Kurir'}
           </Text>
         </View>
       </View>
       <View style={styles.cardBody}>
         <View style={styles.infoRow}>
           <Ionicons name="location-outline" size={20} color="#666" />
-          <Text style={styles.infoText} numberOfLines={2}>{item.address}</Text>
+          <Text style={styles.infoText} numberOfLines={2}>{item.pickup_address}</Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="time-outline" size={20} color="#666" />
           <Text style={styles.infoText}>{new Date(item.created_at).toLocaleString()}</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderSelesai = ({ item }: { item: any }) => {
     const isCredit = item.type === 'setor';
     return (
-      <View style={styles.trxCard}>
+      <TouchableOpacity 
+        style={styles.trxCard}
+        onPress={() => setSelectedTransaction(item)}
+      >
         <View style={[styles.iconBox, { backgroundColor: isCredit ? '#e8f5e9' : '#ffebee' }]}>
           <Ionicons name={isCredit ? 'arrow-down-outline' : 'arrow-up-outline'} size={24} color={isCredit ? '#2e7d32' : '#c62828'} />
         </View>
@@ -74,7 +85,7 @@ export default function RiwayatScreen() {
         <Text style={[styles.trxPoints, { color: isCredit ? '#2e7d32' : '#c62828' }]}>
           {isCredit ? '+' : ''}{item.points}
         </Text>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -122,6 +133,56 @@ export default function RiwayatScreen() {
           ListEmptyComponent={<Text style={styles.emptyText}>Belum ada riwayat transaksi.</Text>}
         />
       )}
+
+      {/* Transaction Detail Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={!!selectedTransaction}
+        onRequestClose={() => setSelectedTransaction(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detail Transaksi</Text>
+              <TouchableOpacity onPress={() => setSelectedTransaction(null)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            {selectedTransaction && (
+              <View style={styles.modalBody}>
+                <View style={[styles.modalIconBox, { backgroundColor: selectedTransaction.type === 'setor' ? '#e8f5e9' : '#ffebee' }]}>
+                  <Ionicons 
+                    name={selectedTransaction.type === 'setor' ? 'arrow-down-outline' : 'arrow-up-outline'} 
+                    size={32} 
+                    color={selectedTransaction.type === 'setor' ? '#2e7d32' : '#c62828'} 
+                  />
+                </View>
+                
+                <Text style={styles.modalTrxTitle}>{selectedTransaction.title}</Text>
+                <Text style={styles.modalTrxDate}>{new Date(selectedTransaction.created_at).toLocaleString()}</Text>
+                
+                <Text style={[styles.modalTrxPoints, { color: selectedTransaction.type === 'setor' ? '#2e7d32' : '#c62828' }]}>
+                  {selectedTransaction.type === 'setor' ? '+' : ''}{selectedTransaction.points} Poin
+                </Text>
+                
+                <View style={styles.modalDivider} />
+                
+                <Text style={styles.modalDescLabel}>Deskripsi</Text>
+                <Text style={styles.modalDescText}>{selectedTransaction.description}</Text>
+              </View>
+            )}
+            
+            <TouchableOpacity 
+              style={styles.modalButton}
+              onPress={() => setSelectedTransaction(null)}
+            >
+              <Text style={styles.modalButtonText}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -256,5 +317,89 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#999',
     marginTop: 50,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalBody: {
+    alignItems: 'center',
+  },
+  modalIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  modalTrxTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  modalTrxDate: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 15,
+  },
+  modalTrxPoints: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: '#eee',
+    width: '100%',
+    marginBottom: 20,
+  },
+  modalDescLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    alignSelf: 'flex-start',
+    marginBottom: 5,
+  },
+  modalDescText: {
+    fontSize: 14,
+    color: '#666',
+    alignSelf: 'flex-start',
+    marginBottom: 30,
+    lineHeight: 20,
+  },
+  modalButton: {
+    backgroundColor: '#00bfa5',
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

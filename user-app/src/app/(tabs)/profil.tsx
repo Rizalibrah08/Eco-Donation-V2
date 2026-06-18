@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import ConfirmModal from '../../components/ConfirmModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
+import Svg, { G, Circle } from 'react-native-svg';
 
 // Donut chart colors per category
 const DONUT_COLORS: Record<string, string> = {
@@ -35,6 +37,7 @@ export default function ProfilScreen() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [distribution, setDistribution] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -58,6 +61,11 @@ export default function ProfilScreen() {
   }, [user]);
 
   const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
     logout();
     router.replace('/(auth)/login');
   };
@@ -98,7 +106,7 @@ export default function ProfilScreen() {
             <Text style={styles.headerName}>{profileData.name}</Text>
             <Text style={styles.headerEmail}>{profileData.email}</Text>
           </View>
-          <TouchableOpacity style={styles.settingsBtn}>
+          <TouchableOpacity style={styles.settingsBtn} onPress={() => Alert.alert('Info', 'Fitur pengaturan akun belum tersedia.')}>
             <Ionicons name="settings-outline" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -157,9 +165,35 @@ export default function ProfilScreen() {
           {totalWeight > 0 ? (
             <>
               <View style={styles.donutContainer}>
-                <View style={styles.donutRing}>
-                  {/* Simple visual donut using border segments */}
-                  <View style={styles.donutCenter}>
+                <View style={styles.svgWrapper}>
+                  <Svg height="150" width="150" viewBox="0 0 160 160">
+                    <G rotation="-90" origin="80, 80">
+                      {distWithPercent.map((d, i) => {
+                        const previousPercents = distWithPercent.slice(0, i).reduce((sum, item) => sum + item.percent, 0);
+                        const radius = 60;
+                        const circumference = 2 * Math.PI * radius;
+                        const strokeDashoffset = circumference - (d.percent / 100) * circumference;
+                        const strokeDasharray = `${circumference} ${circumference}`;
+                        const rotation = (previousPercents / 100) * 360;
+
+                        return (
+                          <Circle
+                            key={i}
+                            cx="80"
+                            cy="80"
+                            r={radius}
+                            stroke={d.color}
+                            strokeWidth="20"
+                            fill="transparent"
+                            strokeDasharray={strokeDasharray}
+                            strokeDashoffset={strokeDashoffset}
+                            transform={`rotate(${rotation}, 80, 80)`}
+                          />
+                        );
+                      })}
+                    </G>
+                  </Svg>
+                  <View style={[StyleSheet.absoluteFill, styles.donutCenter]}>
                     <Text style={styles.donutTotal}>{totalWeight.toFixed(1)}</Text>
                     <Text style={styles.donutUnit}>Kg</Text>
                   </View>
@@ -248,13 +282,13 @@ export default function ProfilScreen() {
 
         {/* Menu Footer */}
         <View style={styles.menuCard}>
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Info', 'Fitur pengaturan akun belum tersedia.')}>
             <Ionicons name="settings-outline" size={20} color="#666" />
             <Text style={styles.menuText}>Pengaturan Akun</Text>
             <Ionicons name="chevron-forward" size={20} color="#ccc" />
           </TouchableOpacity>
           <View style={styles.menuDivider} />
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Info', 'Pusat bantuan belum tersedia.')}>
             <Ionicons name="help-circle-outline" size={20} color="#666" />
             <Text style={styles.menuText}>Pusat Bantuan</Text>
             <Ionicons name="chevron-forward" size={20} color="#ccc" />
@@ -269,6 +303,16 @@ export default function ProfilScreen() {
 
         <View style={{ height: 100 }} />
       </View>
+
+      <ConfirmModal
+        visible={showLogoutModal}
+        title="Konfirmasi Keluar"
+        message="Apakah Anda yakin ingin keluar dari akun ini?"
+        confirmText="Keluar"
+        isDestructive={true}
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setShowLogoutModal(false)}
+      />
     </ScrollView>
   );
 }
@@ -400,16 +444,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 15,
   },
-  donutRing: {
+  svgWrapper: {
     width: 150,
     height: 150,
-    borderRadius: 75,
-    borderWidth: 20,
-    borderColor: '#00bfa5',
     justifyContent: 'center',
     alignItems: 'center',
   },
   donutCenter: {
+    justifyContent: 'center',
     alignItems: 'center',
   },
   donutTotal: {
