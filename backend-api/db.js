@@ -41,6 +41,7 @@ function initDB() {
       pickup_address TEXT,
       scheduled_at TEXT,
       verification_token TEXT,
+      short_token TEXT,
       token_expires_at DATETIME,
       completed_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

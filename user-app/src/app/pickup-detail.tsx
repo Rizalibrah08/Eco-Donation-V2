@@ -1,27 +1,66 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import api from '../services/api';
+import { getSocket } from '../services/socketService';
+import QRCodeDisplay from '../components/QRCodeDisplay';
 
 export default function PickupDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [qrData, setQrData] = useState<any>(null);
 
   useEffect(() => {
     if (id) fetchDetail();
+    
+    const socket = getSocket();
+    if (socket) {
+      socket.on('qr_ready', (data: any) => {
+        if (data.orderId === parseInt(id as string)) {
+          setQrData(data);
+          setShowApprovalModal(true);
+          fetchDetail();
+        }
+      });
+
+      socket.on('notification', (data: any) => {
+        if (data.orderId === parseInt(id as string) && data.type !== 'qr_ready') {
+          fetchDetail();
+        }
+      });
+    }
+    
+    return () => {
+      socket?.off('qr_ready');
+    };
   }, [id]);
 
   const fetchDetail = async () => {
     try {
       const response = await api.get(`/pickups/${id}`);
       setOrder(response.data);
+      if (response.data.status === 'pending_verification') {
+        const qrRes = await api.get(`/pickups/${id}/qr`).catch(() => null);
+        if (qrRes?.data) {
+           setQrData({
+             token: qrRes.data.qr_payload,
+             shortToken: qrRes.data.short_token
+           });
+        }
+      }
     } catch (error) {
       Alert.alert('Error', 'Gagal memuat detail penjemputan.');
-      router.back();
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)');
+      }
     } finally {
       setLoading(false);
     }
@@ -50,7 +89,7 @@ export default function PickupDetailScreen() {
     switch (status) {
       case 'waiting': return 'Menunggu Kurir';
       case 'on_the_way': return 'Kurir Menuju Lokasi';
-      case 'pending_verification': return 'Menunggu Verifikasi QR';
+      case 'pending_verification': return 'Verifikasi QR';
       case 'completed': return 'Selesai';
       case 'cancelled': return 'Dibatalkan';
       default: return status;
@@ -60,7 +99,13 @@ export default function PickupDetailScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient colors={['#004d40', '#00bfa5']} style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(tabs)');
+          }
+        }}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Detail Penjemputan</Text>
@@ -116,25 +161,52 @@ export default function PickupDetailScreen() {
           ))}
         </View>
 
-        {order.status === 'pending_verification' && (
+        {order.status === 'pending_verification' && qrData && (
           <View style={styles.actionCard}>
-            <Ionicons name="qr-code" size={40} color="#ffb300" style={styles.actionIcon} />
-            <Text style={styles.actionTitle}>Menunggu Verifikasi</Text>
+            <Text style={styles.actionTitle}>Tunjukkan ke Kurir</Text>
             <Text style={styles.actionDesc}>
-              Kurir telah menimbang barang Anda. Silakan verifikasi berat aktual melalui scan QR Code dari HP kurir.
+              Biarkan kurir men-scan QR Code di bawah ini atau sebutkan Token untuk menyelesaikan proses dan mencairkan poin.
             </Text>
-            <TouchableOpacity 
-              style={styles.scanButton}
-              onPress={() => router.push('/scan')}
-            >
-              <Ionicons name="scan" size={20} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.scanButtonText}>Scan QR Sekarang</Text>
-            </TouchableOpacity>
+            
+            <View style={styles.qrCodeBox}>
+              <QRCodeDisplay value={qrData.token} size={200} />
+            </View>
+            
+            <View style={styles.tokenBox}>
+              <Text style={styles.tokenLabel}>TOKEN</Text>
+              <Text style={styles.tokenText}>{qrData.shortToken}</Text>
+            </View>
           </View>
         )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showApprovalModal}
+        onRequestClose={() => setShowApprovalModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={{marginBottom: 15}}>
+              <Ionicons name="checkmark-circle" size={60} color="#00bfa5" />
+            </View>
+            <Text style={styles.modalTitle}>Verifikasi Penjemputan</Text>
+            <Text style={styles.modalMessage}>
+              Kurir telah selesai menimbang sampah Anda. Lanjutkan untuk menampilkan kode verifikasi.
+            </Text>
+            <TouchableOpacity 
+              style={styles.modalButton}
+              onPress={() => setShowApprovalModal(false)}
+            >
+              <Text style={styles.modalButtonText}>Tampilkan Kode Verifikasi</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -275,9 +347,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     alignItems: 'center',
   },
-  actionIcon: {
-    marginBottom: 10,
-  },
   actionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -290,17 +359,72 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 20,
   },
-  scanButton: {
-    flexDirection: 'row',
-    backgroundColor: '#00bfa5',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+  qrCodeBox: {
+    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#eee',
+    elevation: 2,
+    marginBottom: 20,
+  },
+  tokenBox: {
+    backgroundColor: '#f5f5f5',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
     borderRadius: 12,
     alignItems: 'center',
     width: '100%',
-    justifyContent: 'center',
   },
-  scanButtonText: {
+  tokenLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  tokenText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#00bfa5',
+    letterSpacing: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 25,
+    alignItems: 'center',
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 25,
+    lineHeight: 22,
+  },
+  modalButton: {
+    backgroundColor: '#00bfa5',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

@@ -84,6 +84,7 @@ router.post('/:id/weigh', (req, res) => {
 
   const db = req.app.locals.db;
   const token = crypto.randomBytes(32).toString('hex');
+  const shortToken = token.substring(0, 6).toUpperCase();
   const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
   // Update items with actual weight
@@ -92,36 +93,46 @@ router.post('/:id/weigh', (req, res) => {
   stmt.finalize();
 
   // Set token and status
-  db.run('UPDATE pickup_orders SET status = ?, verification_token = ?, token_expires_at = ? WHERE id = ?',
-    ['pending_verification', token, expires, req.params.id], function(err) {
+  db.run('UPDATE pickup_orders SET status = ?, verification_token = ?, short_token = ?, token_expires_at = ? WHERE id = ?',
+    ['pending_verification', token, shortToken, expires, req.params.id], function(err) {
       if (err) return res.status(500).json({ error: err.message });
       // Return QR payload
       const qrPayload = JSON.stringify({ order_id: parseInt(req.params.id), token, items });
-      res.json({ qr_payload: qrPayload, expires_at: expires });
+
+      // Emit notification to user
+      const notificationService = req.app.locals.notificationService;
+      db.get('SELECT user_id FROM pickup_orders WHERE id = ?', [req.params.id], (err, order) => {
+        if (order) {
+          notificationService.emitQRReady(order.user_id, parseInt(req.params.id), token, items);
+        }
+      });
+
+      res.json({ qr_payload: qrPayload, short_token: shortToken, expires_at: expires });
     });
 });
 
 // Get QR data for display
 router.get('/:id/qr', (req, res) => {
   const db = req.app.locals.db;
-  db.get('SELECT id, verification_token, token_expires_at FROM pickup_orders WHERE id = ? AND status = ?',
+  db.get('SELECT id, verification_token, short_token, token_expires_at FROM pickup_orders WHERE id = ? AND status = ?',
     [req.params.id, 'pending_verification'], (err, order) => {
       if (!order) return res.status(404).json({ error: 'No pending verification' });
       db.all('SELECT id, category, actual_weight FROM pickup_items WHERE order_id = ?', [order.id], (err, items) => {
         const payload = JSON.stringify({ order_id: order.id, token: order.verification_token, items });
-        res.json({ qr_payload: payload, expires_at: order.token_expires_at });
+        res.json({ qr_payload: payload, short_token: order.short_token, expires_at: order.token_expires_at });
       });
     });
 });
 
-// User verifies QR scan
+// User or Courier verifies QR scan
 router.post('/:id/verify', (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ error: 'token required' });
 
   const db = req.app.locals.db;
-  db.get('SELECT * FROM pickup_orders WHERE id = ? AND verification_token = ?',
-    [req.params.id, token], (err, order) => {
+  db.get('SELECT * FROM pickup_orders WHERE id = ? AND (verification_token = ? OR short_token = ?)',
+    [req.params.id, token, token], (err, order) => {
+      if (err) return res.status(500).json({ error: err.message });
       if (!order) return res.status(400).json({ error: 'Invalid token' });
       if (new Date(order.token_expires_at) < new Date()) return res.status(400).json({ error: 'Token expired' });
       
@@ -140,8 +151,8 @@ router.post('/:id/verify', (req, res) => {
 
         db.serialize(() => {
           // Complete order with atomic status check
-          db.run('UPDATE pickup_orders SET status = ?, completed_at = ? WHERE id = ? AND status = ? AND verification_token = ?',
-            ['completed', new Date().toISOString(), order.id, 'pending_verification', token], function(err) {
+          db.run('UPDATE pickup_orders SET status = ?, completed_at = ? WHERE id = ? AND status = ? AND (verification_token = ? OR short_token = ?)',
+            ['completed', new Date().toISOString(), order.id, 'pending_verification', token, token], function(err) {
               if (err) return res.status(500).json({ error: err.message });
               if (this.changes === 0) return res.status(400).json({ error: 'Order already verified or token invalid' });
 

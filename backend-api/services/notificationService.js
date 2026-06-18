@@ -85,6 +85,28 @@ class NotificationService {
       'Kurir telah menimbang barang Anda. Pindai QR di aplikasi untuk verifikasi dan mencairkan poin.'
     );
   }
+
+  emitQRReady(userId, orderId, token, items) {
+    const shortToken = token.substring(0, 6).toUpperCase();
+    this.emitNotification(
+      userId,
+      orderId,
+      'qr_ready',
+      'QR Verifikasi Siap!',
+      'Kurir telah menimbang barang Anda. Ketuk untuk memverifikasi dan mencairkan poin.'
+    );
+
+    const socketId = this.userSockets[userId];
+    if (socketId && this.io.sockets.sockets.get(socketId)) {
+      this.io.to(socketId).emit('qr_ready', {
+        orderId,
+        token,
+        shortToken,
+        items,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
 }
 
 module.exports = NotificationService;
