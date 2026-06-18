@@ -10,7 +10,14 @@ router.get('/', (req, res) => {
   if (category && category !== 'Semua') { sql += ' AND category = ?'; params.push(category); }
   if (search) { sql += ' AND title LIKE ?'; params.push(`%${search}%`); }
   sql += ' ORDER BY is_urgent DESC, created_at DESC';
-  db.all(sql, params, (err, rows) => res.json(rows || []));
+  db.all(sql, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const parsedRows = (rows || []).map(row => ({
+      ...row,
+      updates: JSON.parse(row.updates || '[]')
+    }));
+    res.json(parsedRows);
+  });
 });
 
 // Get single campaign

@@ -23,6 +23,7 @@ export default function SetorScreen() {
     { name: 'Botol Plastik', weight: '' }
   ]);
   const [address, setAddress] = useState('');
+  const [scheduledAt, setScheduledAt] = useState('');
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -60,6 +61,11 @@ export default function SetorScreen() {
       return;
     }
 
+    if (!scheduledAt.trim()) {
+      Alert.alert('Error', 'Silakan isi jadwal penjemputan.');
+      return;
+    }
+
     const items = categories
       .filter(c => parseFloat(c.weight) > 0)
       .map(c => ({ category: c.name, estimated_weight: parseFloat(c.weight) }));
@@ -85,6 +91,7 @@ export default function SetorScreen() {
       await api.post('/pickups', {
         user_id: user?.id,
         pickup_address: address,
+        scheduled_at: scheduledAt,
         items
       });
       
@@ -173,6 +180,16 @@ export default function SetorScreen() {
             placeholder="Contoh: Jl. Sudirman No. 12, Kost Biru Kamar 4"
             value={address}
             onChangeText={setAddress}
+          />
+        </View>
+
+        <View style={[styles.inputGroup, { marginTop: 15 }]}>
+          <Text style={styles.label}>Jadwal Penjemputan</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Contoh: Hari ini 14:00"
+            value={scheduledAt}
+            onChangeText={setScheduledAt}
           />
         </View>
 

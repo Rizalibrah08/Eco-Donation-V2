@@ -120,11 +120,11 @@ router.post('/:id/verify', (req, res) => {
   if (!token) return res.status(400).json({ error: 'token required' });
 
   const db = req.app.locals.db;
-  db.get('SELECT * FROM pickup_orders WHERE id = ? AND verification_token = ? AND status = ?',
-    [req.params.id, token, 'pending_verification'], (err, order) => {
-      if (!order) return res.status(400).json({ error: 'Invalid or expired token' });
+  db.get('SELECT * FROM pickup_orders WHERE id = ? AND verification_token = ?',
+    [req.params.id, token], (err, order) => {
+      if (!order) return res.status(400).json({ error: 'Invalid token' });
       if (new Date(order.token_expires_at) < new Date()) return res.status(400).json({ error: 'Token expired' });
-
+      
       // Calculate points from actual weights
       db.all('SELECT * FROM pickup_items WHERE order_id = ?', [order.id], (err, items) => {
         let totalPoints = 0;
@@ -139,17 +139,21 @@ router.post('/:id/verify', (req, res) => {
         const desc = items.map(i => `${i.category} ${i.actual_weight}Kg`).join(', ');
 
         db.serialize(() => {
-          // Complete order
-          db.run('UPDATE pickup_orders SET status = ?, completed_at = ? WHERE id = ?',
-            ['completed', new Date().toISOString(), order.id]);
-          // Add points to user
-          db.run('UPDATE users SET points = points + ?, total_kg = total_kg + ?, total_co2 = total_co2 + ?, total_setor_count = total_setor_count + 1 WHERE id = ?',
-            [totalPoints, totalKg, co2, order.user_id]);
-          // Create transaction record
-          db.run('INSERT INTO transactions (user_id, type, title, description, points) VALUES (?, ?, ?, ?, ?)',
-            [order.user_id, 'setor', `Setor Multi Kategori (Verified)`, desc, totalPoints]);
+          // Complete order with atomic status check
+          db.run('UPDATE pickup_orders SET status = ?, completed_at = ? WHERE id = ? AND status = ? AND verification_token = ?',
+            ['completed', new Date().toISOString(), order.id, 'pending_verification', token], function(err) {
+              if (err) return res.status(500).json({ error: err.message });
+              if (this.changes === 0) return res.status(400).json({ error: 'Order already verified or token invalid' });
 
-          res.json({ success: true, points_earned: totalPoints, total_kg: totalKg, items });
+              // Add points to user
+              db.run('UPDATE users SET points = points + ?, total_kg = total_kg + ?, total_co2 = total_co2 + ?, total_setor_count = total_setor_count + 1 WHERE id = ?',
+                [totalPoints, totalKg, co2, order.user_id]);
+              // Create transaction record
+              db.run('INSERT INTO transactions (user_id, type, title, description, points) VALUES (?, ?, ?, ?, ?)',
+                [order.user_id, 'setor', `Setor Multi Kategori (Verified)`, desc, totalPoints]);
+
+              res.json({ success: true, points_earned: totalPoints, total_kg: totalKg, items });
+            });
         });
       });
     });

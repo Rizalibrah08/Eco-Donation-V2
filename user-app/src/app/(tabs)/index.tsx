@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,6 +10,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, updateUserPoints } = useAuthStore();
   const [activePickup, setActivePickup] = React.useState<any>(null);
+  const [hasUnreadNotif, setHasUnreadNotif] = React.useState(false);
 
   // Fetch updated user data (points) when screen comes into focus
   useFocusEffect(
@@ -55,9 +56,15 @@ export default function HomeScreen() {
             <Text style={styles.greeting}>Halo, {user?.name?.split(' ')[0] || 'User'}!</Text>
             <Text style={styles.subGreeting}>Mari hijaukan bumi hari ini 🌍</Text>
           </View>
-          <TouchableOpacity style={styles.notifButton}>
+          <TouchableOpacity 
+            style={styles.notifButton}
+            onPress={() => {
+              setHasUnreadNotif(false);
+              Alert.alert('Notifikasi', 'Tidak ada notifikasi baru.');
+            }}
+          >
             <Ionicons name="notifications-outline" size={24} color="#fff" />
-            <View style={styles.notifBadge} />
+            {hasUnreadNotif && <View style={styles.notifBadge} />}
           </TouchableOpacity>
         </View>
 
@@ -89,7 +96,7 @@ export default function HomeScreen() {
         {activePickup && (
           <TouchableOpacity 
             style={styles.bannerContainer}
-            onPress={() => router.push(`/pickup-detail`)}
+            onPress={() => router.push({ pathname: '/pickup-detail', params: { id: activePickup.id } })}
           >
             <LinearGradient
               colors={['#fff3e0', '#ffe0b2']}
