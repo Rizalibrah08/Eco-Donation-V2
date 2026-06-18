@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Ionicons } from '@expo/vector-icons';
+import WarningModal from '../../components/WarningModal';
+import ErrorModal from '../../components/ErrorModal';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -12,40 +14,44 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      Alert.alert('Error', 'Silakan isi semua data.');
+      setShowWarning(true);
       return;
     }
-    
+
     setLoading(true);
     try {
       // Create user and auto login
       const response = await api.post('/auth/register', { name, email, password, role: 'user' });
       const { user, token } = response.data;
-      
+
       login(user, token);
       setShowSuccessModal(true);
     } catch (error: any) {
-      Alert.alert('Pendaftaran Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
+      setErrorMessage(error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
+      setShowError(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <LinearGradient
         colors={['#004d40', '#00bfa5']}
         style={styles.background}
       />
-      
+
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -81,7 +87,7 @@ export default function RegisterScreen() {
                 autoCapitalize="none"
               />
             </View>
-            
+
             <View style={styles.inputContainer}>
               <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
@@ -94,9 +100,9 @@ export default function RegisterScreen() {
               />
             </View>
 
-            <TouchableOpacity 
-              style={styles.registerButton} 
-              onPress={handleRegister} 
+            <TouchableOpacity
+              style={styles.registerButton}
+              onPress={handleRegister}
               disabled={loading}
             >
               {loading ? (
@@ -105,7 +111,7 @@ export default function RegisterScreen() {
                 <Text style={styles.registerButtonText}>Daftar</Text>
               )}
             </TouchableOpacity>
-            
+
             <View style={styles.loginContainer}>
               <Text style={styles.loginText}>Sudah punya akun? </Text>
               <TouchableOpacity onPress={() => router.back()}>
@@ -135,7 +141,7 @@ export default function RegisterScreen() {
             <Text style={styles.modalMessage}>
               Pendaftaran berhasil. Mari mulai perjalanan donasimu bersama Eco-Donation.
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
                 setShowSuccessModal(false);
@@ -147,6 +153,20 @@ export default function RegisterScreen() {
           </View>
         </View>
       </Modal>
+
+      <WarningModal
+        visible={showWarning}
+        title="Form Tidak Lengkap"
+        message="Silakan isi semua data (Nama, Email, dan Password) untuk mendaftar."
+        onConfirm={() => setShowWarning(false)}
+      />
+
+      <ErrorModal
+        visible={showError}
+        title="Pendaftaran Gagal"
+        message={errorMessage}
+        onConfirm={() => setShowError(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

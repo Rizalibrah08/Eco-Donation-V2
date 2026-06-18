@@ -55,9 +55,10 @@ setTimeout(() => {
 
     // Pickup orders for Satrio (user_id=1)
     const verifyToken = require('crypto').randomBytes(32).toString('hex');
-    const tokenExpires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, verification_token, token_expires_at, created_at) VALUES
-      (1, 1, 'pending_verification', 'Jl. Sudirman No. 123', '2026-05-18 10:00', '${verifyToken}', '${tokenExpires}', '2026-05-17 08:00')`);
+    const shortToken = verifyToken.substring(0, 6).toUpperCase();
+    const tokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // +7 days
+    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, verification_token, short_token, token_expires_at, created_at) VALUES
+      (1, 1, 'pending_verification', 'Jl. Sudirman No. 123', '2026-05-18 10:00', '${verifyToken}', '${shortToken}', '${tokenExpires}', '2026-05-17 08:00')`);
     db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, created_at) VALUES
       (1, NULL, 'waiting', 'Universitas Indonesia', '2026-05-19 09:00', '2026-05-18 07:00')`);
     db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, completed_at, created_at) VALUES

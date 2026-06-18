@@ -4,37 +4,43 @@ import { useRouter } from 'expo-router';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Ionicons } from '@expo/vector-icons';
+import WarningModal from '../../components/WarningModal';
+import ErrorModal from '../../components/ErrorModal';
 
 export default function CourierLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Silakan isi email dan password.');
+      setShowWarning(true);
       return;
     }
-    
+
     setLoading(true);
     try {
       const response = await api.post('/auth/courier/login', { email, password });
       const { courier, user, token } = response.data;
-      
+
       login(courier || user, token);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
+      setErrorMessage(error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
+      setShowError(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <View style={styles.topSection}>
@@ -44,10 +50,10 @@ export default function CourierLoginScreen() {
         <Text style={styles.title}>Courier App</Text>
         <Text style={styles.subtitle}>Eco-Donation Assistant</Text>
       </View>
-      
+
       <View style={styles.bottomSection}>
         <Text style={styles.loginTitle}>Masuk sebagai Kurir</Text>
-        
+
         <View style={styles.inputContainer}>
           <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
           <TextInput
@@ -60,7 +66,7 @@ export default function CourierLoginScreen() {
             autoCapitalize="none"
           />
         </View>
-        
+
         <View style={styles.inputContainer}>
           <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
           <TextInput
@@ -73,9 +79,9 @@ export default function CourierLoginScreen() {
           />
         </View>
 
-        <TouchableOpacity 
-          style={styles.loginButton} 
-          onPress={handleLogin} 
+        <TouchableOpacity
+          style={styles.loginButton}
+          onPress={handleLogin}
           disabled={loading}
         >
           {loading ? (
@@ -85,6 +91,20 @@ export default function CourierLoginScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      <WarningModal
+        visible={showWarning}
+        title="Form Tidak Lengkap"
+        message="Silakan isi email dan password untuk masuk."
+        onConfirm={() => setShowWarning(false)}
+      />
+
+      <ErrorModal
+        visible={showError}
+        title="Login Gagal"
+        message={errorMessage}
+        onConfirm={() => setShowError(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

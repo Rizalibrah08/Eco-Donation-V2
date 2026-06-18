@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import ConfirmModal from '../../components/ConfirmModal';
+import WarningModal from '../../components/WarningModal';
+import ErrorModal from '../../components/ErrorModal';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +20,10 @@ export default function CampaignDetailScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const [warningMessage, setWarningMessage] = useState('');
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [donatedAmount, setDonatedAmount] = useState(0);
 
   useEffect(() => {
@@ -29,7 +35,8 @@ export default function CampaignDetailScreen() {
       const response = await api.get(`/campaigns/${id}`);
       setCampaign(response.data);
     } catch (error) {
-      Alert.alert('Error', 'Gagal memuat detail kampanye.');
+      setErrorMessage('Gagal memuat detail kampanye.');
+      setShowError(true);
       router.back();
     } finally {
       setLoading(false);
@@ -40,12 +47,14 @@ export default function CampaignDetailScreen() {
     const amount = parseInt(donateAmount.replace(/\D/g, ''), 10);
     
     if (!amount || amount <= 0) {
-      Alert.alert('Error', 'Masukkan nominal donasi yang valid.');
+      setWarningMessage('Masukkan nominal donasi yang valid.');
+      setShowWarning(true);
       return;
     }
 
     if (user && user.points < amount) {
-      Alert.alert('Saldo Tidak Cukup', `Saldo Anda: ${user.points} Poin. Anda membutuhkan ${amount - user.points} Poin lagi.`);
+      setWarningMessage(`Saldo Anda: ${user.points} Poin. Anda membutuhkan ${amount - user.points} Poin lagi.`);
+      setShowWarning(true);
       return;
     }
 
@@ -71,7 +80,8 @@ export default function CampaignDetailScreen() {
       setDonatedAmount(amount);
       setShowSuccessModal(true);
     } catch (error: any) {
-      Alert.alert('Donasi Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan');
+      setErrorMessage(error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan');
+      setShowError(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -207,6 +217,20 @@ export default function CampaignDetailScreen() {
         message={`Anda akan mendonasikan Rp ${(parseInt(donateAmount.replace(/\D/g, ''), 10) || 0).toLocaleString('id-ID')} (${parseInt(donateAmount.replace(/\D/g, ''), 10) || 0} Poin) ke kampanye "${campaign.title}".\n\nLanjutkan?`}
         onConfirm={handleConfirmDonate}
         onCancel={() => setShowConfirmModal(false)}
+      />
+
+      <WarningModal
+        visible={showWarning}
+        title="Perhatian"
+        message={warningMessage}
+        onConfirm={() => setShowWarning(false)}
+      />
+
+      <ErrorModal
+        visible={showError}
+        title="Donasi Gagal"
+        message={errorMessage}
+        onConfirm={() => setShowError(false)}
       />
     </KeyboardAvoidingView>
   );

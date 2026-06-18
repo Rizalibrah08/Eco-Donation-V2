@@ -5,44 +5,50 @@ import { LinearGradient } from 'expo-linear-gradient';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Ionicons } from '@expo/vector-icons';
+import WarningModal from '../../components/WarningModal';
+import ErrorModal from '../../components/ErrorModal';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Silakan isi email dan password.');
+      setShowWarning(true);
       return;
     }
-    
+
     setLoading(true);
     try {
       const response = await api.post('/auth/login', { email, password });
       const { user, token } = response.data;
-      
+
       login(user, token);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
+      setErrorMessage(error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
+      setShowError(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <LinearGradient
         colors={['#004d40', '#00bfa5']}
         style={styles.background}
       />
-      
+
       <View style={styles.card}>
         <View style={styles.headerContainer}>
           <View style={styles.iconContainer}>
@@ -65,7 +71,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
             />
           </View>
-          
+
           <View style={styles.inputContainer}>
             <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
@@ -78,9 +84,9 @@ export default function LoginScreen() {
             />
           </View>
 
-          <TouchableOpacity 
-            style={styles.loginButton} 
-            onPress={handleLogin} 
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
@@ -89,7 +95,7 @@ export default function LoginScreen() {
               <Text style={styles.loginButtonText}>Masuk</Text>
             )}
           </TouchableOpacity>
-          
+
           <View style={styles.registerContainer}>
             <Text style={styles.registerText}>Belum punya akun? </Text>
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
@@ -98,6 +104,20 @@ export default function LoginScreen() {
           </View>
         </View>
       </View>
+
+      <WarningModal
+        visible={showWarning}
+        title="Form Tidak Lengkap"
+        message="Silakan isi email dan password untuk melanjutkan."
+        onConfirm={() => setShowWarning(false)}
+      />
+
+      <ErrorModal
+        visible={showError}
+        title="Login Gagal"
+        message={errorMessage}
+        onConfirm={() => setShowError(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
