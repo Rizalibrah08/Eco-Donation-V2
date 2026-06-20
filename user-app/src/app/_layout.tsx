@@ -85,6 +85,8 @@ export default function RootLayout() {
         <Stack.Screen name="setor" />
         <Stack.Screen name="campaign/[id]" />
         <Stack.Screen name="pickup-detail" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="help" />
       </Stack>
     </>
   );

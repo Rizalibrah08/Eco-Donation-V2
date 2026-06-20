@@ -201,7 +201,7 @@ export default function CampaignDetailScreen() {
           <View style={styles.donationSection}>
             <Text style={styles.sectionTitle}>Masukkan Nominal Donasi</Text>
             <View style={styles.inputContainer}>
-              <Text style={styles.currencyPrefix}>Rp</Text>
+              <Ionicons name="leaf" size={20} color="#00bfa5" style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.input}
                 keyboardType="numeric"
@@ -249,7 +249,7 @@ export default function CampaignDetailScreen() {
             </View>
             <Text style={styles.modalTitle}>Donasi Berhasil!</Text>
             <Text style={styles.modalMessage}>
-              Terima kasih telah berdonasi sebesar Rp {donatedAmount.toLocaleString('id-ID')}.
+              Terima kasih telah berdonasi sebesar {donatedAmount.toLocaleString('id-ID')} Poin.
             </Text>
             <TouchableOpacity 
               style={styles.modalButton}
@@ -267,7 +267,7 @@ export default function CampaignDetailScreen() {
       <ConfirmModal
         visible={showConfirmModal}
         title="Konfirmasi Donasi"
-        message={`Anda akan mendonasikan Rp ${(parseInt(donateAmount.replace(/\D/g, ''), 10) || 0).toLocaleString('id-ID')} (${parseInt(donateAmount.replace(/\D/g, ''), 10) || 0} Poin) ke kampanye "${campaign.title}".\n\nLanjutkan?`}
+        message={`Anda akan mendonasikan ${(parseInt(donateAmount.replace(/\D/g, ''), 10) || 0).toLocaleString('id-ID')} Poin ke kampanye "${campaign.title}".\n\nLanjutkan?`}
         onConfirm={handleConfirmDonate}
         onCancel={() => setShowConfirmModal(false)}
       />
@@ -468,6 +468,8 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
@@ -478,6 +480,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     marginLeft: 10,
+    flexShrink: 0,
   },
   maxButtonText: {
     color: '#00695c',

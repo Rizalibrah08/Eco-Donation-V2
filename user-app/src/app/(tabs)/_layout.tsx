@@ -16,8 +16,8 @@ export default function TabLayout() {
             shadowOffset: { width: 0, height: -3 },
             shadowOpacity: 0.1,
             shadowRadius: 5,
-            height: 60,
-            paddingBottom: 10,
+            height: 75,
+            paddingBottom: 15,
             paddingTop: 5,
           },
         }}>

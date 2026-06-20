@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
 import ConfirmModal from '../../components/ConfirmModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -18,10 +18,10 @@ const DONUT_COLORS: Record<string, string> = {
 
 // Badge definitions
 const BADGE_DEFS = [
-  { key: 'eco_warrior', name: 'Eco Warrior', icon: 'leaf-outline' as const, color: '#00bfa5', bg: '#e0f2f1' },
-  { key: 'recycling_hero', name: 'Recycling Hero', icon: 'refresh-outline' as const, color: '#1565c0', bg: '#e3f2fd' },
-  { key: 'kind_heart', name: 'Kind Heart', icon: 'heart' as const, color: '#e91e63', bg: '#fce4ec' },
-  { key: 'top_donor', name: 'Top Donor', icon: 'trophy-outline' as const, color: '#9e9e9e', bg: '#f5f5f5' },
+  { key: 'eco_warrior', name: 'Eco Warrior', desc: 'Kumpulkan 50 Kg sampah yang didaur ulang.', target: 50, metric: 'total_kg', unit: 'Kg', icon: 'leaf-outline' as const, color: '#00bfa5', bg: '#e0f2f1' },
+  { key: 'recycling_hero', name: 'Recycling Hero', desc: 'Selesaikan 10 kali penyetoran sampah.', target: 10, metric: 'total_setor_count', unit: 'kali', icon: 'refresh-outline' as const, color: '#1565c0', bg: '#e3f2fd' },
+  { key: 'kind_heart', name: 'Kind Heart', desc: 'Lakukan donasi ke kampanye sebanyak 5 kali.', target: 5, metric: 'total_donasi_count', unit: 'kali', icon: 'heart' as const, color: '#e91e63', bg: '#fce4ec' },
+  { key: 'top_donor', name: 'Top Donor', desc: 'Berdonasi lebih dari 1.000 Poin.', target: 1000, metric: 'total_donations_rp', unit: 'Poin', icon: 'trophy-outline' as const, color: '#9e9e9e', bg: '#f5f5f5' },
 ];
 
 const TIER_COLORS: Record<string, string> = {
@@ -38,6 +38,13 @@ export default function ProfilScreen() {
   const [distribution, setDistribution] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState<any>(null);
+  const [showBadgeModal, setShowBadgeModal] = useState(false);
+
+  const openBadgeModal = (badgeDef: any, earned: any) => {
+    setSelectedBadge({ def: badgeDef, earned });
+    setShowBadgeModal(true);
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -106,7 +113,7 @@ export default function ProfilScreen() {
             <Text style={styles.headerName}>{profileData.name}</Text>
             <Text style={styles.headerEmail}>{profileData.email}</Text>
           </View>
-          <TouchableOpacity style={styles.settingsBtn} onPress={() => Alert.alert('Info', 'Fitur pengaturan akun belum tersedia.')}>
+          <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push('/settings')}>
             <Ionicons name="settings-outline" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -153,8 +160,8 @@ export default function ProfilScreen() {
               <View style={[styles.impactIcon, { backgroundColor: '#fce4ec' }]}>
                 <Ionicons name="heart" size={22} color="#c2185b" />
               </View>
-              <Text style={styles.impactValue}>Rp{((profileData.total_donations_rp || 0) / 1000).toFixed(0)}K</Text>
-              <Text style={styles.impactLabel}>Donasi</Text>
+              <Text style={styles.impactValue}>{profileData.total_donations_rp || 0}</Text>
+              <Text style={styles.impactLabel}>Poin Donasi</Text>
             </View>
           </View>
         </View>
@@ -223,7 +230,12 @@ export default function ProfilScreen() {
             {BADGE_DEFS.map((def) => {
               const earned = profileData.badges?.find((b: any) => b.name === def.name);
               return (
-                <View key={def.key} style={styles.badgeItem}>
+                <TouchableOpacity 
+                  key={def.key} 
+                  style={styles.badgeItem}
+                  onPress={() => openBadgeModal(def, earned)}
+                  activeOpacity={0.7}
+                >
                   <View style={[styles.badgeCircle, { backgroundColor: earned ? def.bg : '#f5f5f5' }]}>
                     <Ionicons 
                       name={def.icon} 
@@ -237,7 +249,7 @@ export default function ProfilScreen() {
                       {earned.tier.charAt(0).toUpperCase() + earned.tier.slice(1)}
                     </Text>
                   )}
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -282,13 +294,13 @@ export default function ProfilScreen() {
 
         {/* Menu Footer */}
         <View style={styles.menuCard}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Info', 'Fitur pengaturan akun belum tersedia.')}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings')}>
             <Ionicons name="settings-outline" size={20} color="#666" />
             <Text style={styles.menuText}>Pengaturan Akun</Text>
             <Ionicons name="chevron-forward" size={20} color="#ccc" />
           </TouchableOpacity>
           <View style={styles.menuDivider} />
-          <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert('Info', 'Pusat bantuan belum tersedia.')}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/help')}>
             <Ionicons name="help-circle-outline" size={20} color="#666" />
             <Text style={styles.menuText}>Pusat Bantuan</Text>
             <Ionicons name="chevron-forward" size={20} color="#ccc" />
@@ -313,6 +325,71 @@ export default function ProfilScreen() {
         onConfirm={handleConfirmLogout}
         onCancel={() => setShowLogoutModal(false)}
       />
+
+      {/* Badge Modal */}
+      <Modal
+        visible={showBadgeModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowBadgeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {selectedBadge && (
+              <>
+                <View style={[styles.modalBadgeCircle, { backgroundColor: selectedBadge.earned ? selectedBadge.def.bg : '#f5f5f5' }]}>
+                  <Ionicons 
+                    name={selectedBadge.def.icon} 
+                    size={48} 
+                    color={selectedBadge.earned ? selectedBadge.def.color : '#ccc'} 
+                  />
+                </View>
+                <Text style={styles.modalBadgeName}>{selectedBadge.def.name}</Text>
+                
+                {selectedBadge.earned ? (
+                  <View style={styles.earnedBadge}>
+                    <Ionicons name="checkmark-circle" size={20} color="#00bfa5" />
+                    <Text style={styles.earnedText}>Lencana Didapatkan!</Text>
+                  </View>
+                ) : (
+                  <View style={styles.lockedBadge}>
+                    <Ionicons name="lock-closed" size={16} color="#888" />
+                    <Text style={styles.lockedText}>Lencana Terkunci</Text>
+                  </View>
+                )}
+
+                <Text style={styles.modalBadgeDesc}>{selectedBadge.def.desc}</Text>
+
+                {!selectedBadge.earned && (
+                  <View style={styles.progressContainer}>
+                    <View style={styles.progressHeader}>
+                      <Text style={styles.progressLabel}>Progress</Text>
+                      <Text style={styles.progressValue}>
+                        {Math.min(profileData[selectedBadge.def.metric] || 0, selectedBadge.def.target)} / {selectedBadge.def.target} {selectedBadge.def.unit}
+                      </Text>
+                    </View>
+                    <View style={styles.progressBarBg}>
+                      <View 
+                        style={[
+                          styles.progressBarFill, 
+                          { width: `${Math.min(((profileData[selectedBadge.def.metric] || 0) / selectedBadge.def.target) * 100, 100)}%` }
+                        ]} 
+                      />
+                    </View>
+                  </View>
+                )}
+
+                <TouchableOpacity 
+                  style={styles.modalCloseBtn} 
+                  onPress={() => setShowBadgeModal(false)}
+                >
+                  <Text style={styles.modalCloseText}>Tutup</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -588,5 +665,119 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 14,
     paddingVertical: 20,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  modalBadgeCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalBadgeName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  earnedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 16,
+  },
+  earnedText: {
+    color: '#2e7d32',
+    fontWeight: 'bold',
+    marginLeft: 6,
+    fontSize: 14,
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 16,
+  },
+  lockedText: {
+    color: '#888',
+    fontWeight: 'bold',
+    marginLeft: 6,
+    fontSize: 14,
+  },
+  modalBadgeDesc: {
+    fontSize: 15,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  progressContainer: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  progressLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#555',
+  },
+  progressValue: {
+    fontSize: 14,
+    color: '#00bfa5',
+    fontWeight: 'bold',
+  },
+  progressBarBg: {
+    width: '100%',
+    height: 10,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#00bfa5',
+    borderRadius: 5,
+  },
+  modalCloseBtn: {
+    width: '100%',
+    paddingVertical: 14,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#555',
   },
 });
