@@ -3,38 +3,52 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndi
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import api from '../../services/api';
-
-interface Campaign {
-  id: number;
-  title: string;
-  category: string;
-  target_amount: number;
-  collected_amount: number;
-  image_url: string;
-}
+import { globalGivingService, ExternalCampaign } from '../../services/globalGivingService';
 
 export default function KatalogScreen() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaigns, setCampaigns] = useState<ExternalCampaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    fetchCampaigns();
+    fetchCampaigns(1);
   }, []);
 
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = async (pageNumber: number) => {
     try {
-      const response = await api.get('/campaigns');
-      setCampaigns(response.data);
+      if (pageNumber === 1) setLoading(true);
+      else setLoadingMore(true);
+
+      const data = await globalGivingService.fetchCampaigns(pageNumber, 10);
+      
+      if (data.length === 0) {
+        setHasMore(false);
+      } else {
+        if (pageNumber === 1) {
+          setCampaigns(data);
+        } else {
+          setCampaigns(prev => [...prev, ...data]);
+        }
+        setPage(pageNumber);
+      }
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const renderItem = ({ item }: { item: Campaign }) => {
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchCampaigns(page + 1);
+    }
+  };
+
+  const renderItem = ({ item }: { item: ExternalCampaign }) => {
     const progress = Math.min(((item.collected_amount || 0) / (item.target_amount || 1)) * 100, 100);
     
     return (
@@ -47,8 +61,13 @@ export default function KatalogScreen() {
           style={styles.image} 
         />
         <View style={styles.cardBody}>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>{item.category}</Text>
+          <View style={styles.badgesContainer}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{item.category}</Text>
+            </View>
+            <View style={styles.sourceBadge}>
+              <Text style={styles.sourceText}>Sumber: GlobalGiving</Text>
+            </View>
           </View>
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           
@@ -88,6 +107,9 @@ export default function KatalogScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#00bfa5" style={{marginVertical: 20}} /> : null}
         />
       )}
     </View>
@@ -143,16 +165,34 @@ const styles = StyleSheet.create({
   cardBody: {
     padding: 15,
   },
+  badgesContainer: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
   categoryBadge: {
     backgroundColor: '#e0f2f1',
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    marginBottom: 8,
+    marginRight: 8,
   },
   categoryText: {
     color: '#004d40',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  sourceBadge: {
+    backgroundColor: '#fff3e0',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  sourceText: {
+    color: '#e65100',
     fontSize: 12,
     fontWeight: 'bold',
   },

@@ -35,11 +35,13 @@ router.get('/', (req, res) => {
   sql += ' ORDER BY created_at DESC';
 
   db.all(sql, params, (err, orders) => {
+    if (err) return res.status(500).json({ error: err.message });
     if (!orders?.length) return res.json([]);
     // Attach items to each order
     let completed = 0;
     orders.forEach((order, i) => {
       db.all('SELECT * FROM pickup_items WHERE order_id = ?', [order.id], (err, items) => {
+        if (err) console.error(err);
         orders[i].items = items || [];
         completed++;
         if (completed === orders.length) res.json(orders);
@@ -54,8 +56,10 @@ router.get('/:id', (req, res) => {
   db.get(`SELECT po.*, u.name as user_name FROM pickup_orders po
     JOIN users u ON po.user_id = u.id
     WHERE po.id = ?`, [req.params.id], (err, order) => {
+    if (err) return res.status(500).json({ error: err.message });
     if (!order) return res.status(404).json({ error: 'Not found' });
     db.all('SELECT * FROM pickup_items WHERE order_id = ?', [order.id], (err, items) => {
+      if (err) return res.status(500).json({ error: err.message });
       order.items = items || [];
       res.json(order);
     });
@@ -73,6 +77,15 @@ router.patch('/:id/status', (req, res) => {
   params.push(req.params.id);
   db.run(sql, params, function(err) {
     if (err) return res.status(500).json({ error: err.message });
+    
+    if (status === 'on_the_way' && courier_id) {
+      db.get('SELECT po.user_id, c.name FROM pickup_orders po JOIN couriers c ON c.id = po.courier_id WHERE po.id = ?', [req.params.id], (err, data) => {
+        if (data) {
+          req.app.locals.notificationService.emitCourierAccepted(parseInt(req.params.id), data.user_id, data.name);
+        }
+      });
+    }
+
     res.json({ success: true });
   });
 });
@@ -85,30 +98,32 @@ router.post('/:id/weigh', (req, res) => {
   const db = req.app.locals.db;
   const token = crypto.randomBytes(32).toString('hex');
   const shortToken = token.substring(0, 6).toUpperCase();
-  const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
 
-  // Update items with actual weight
-  const stmt = db.prepare('UPDATE pickup_items SET actual_weight = ? WHERE id = ?');
-  items.forEach(item => stmt.run(item.actual_weight, item.id));
-  stmt.finalize();
+  db.serialize(() => {
+    // Update items with actual weight
+    const stmt = db.prepare('UPDATE pickup_items SET actual_weight = ? WHERE id = ?');
+    items.forEach(item => stmt.run(item.actual_weight, item.id));
+    stmt.finalize();
 
-  // Set token and status
-  db.run('UPDATE pickup_orders SET status = ?, verification_token = ?, short_token = ?, token_expires_at = ? WHERE id = ?',
-    ['pending_verification', token, shortToken, expires, req.params.id], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      // Return QR payload
-      const qrPayload = JSON.stringify({ order_id: parseInt(req.params.id), token, items });
+    // Set token and status
+    db.run('UPDATE pickup_orders SET status = ?, verification_token = ?, short_token = ?, token_expires_at = ? WHERE id = ?',
+      ['pending_verification', token, shortToken, expires, req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        // Return QR payload
+        const qrPayload = JSON.stringify({ order_id: parseInt(req.params.id), token, items });
 
-      // Emit notification to user
-      const notificationService = req.app.locals.notificationService;
-      db.get('SELECT user_id FROM pickup_orders WHERE id = ?', [req.params.id], (err, order) => {
-        if (order) {
-          notificationService.emitQRReady(order.user_id, parseInt(req.params.id), token, items);
-        }
+        // Emit notification to user
+        const notificationService = req.app.locals.notificationService;
+        db.get('SELECT user_id FROM pickup_orders WHERE id = ?', [req.params.id], (err, order) => {
+          if (order) {
+            notificationService.emitQRReady(order.user_id, parseInt(req.params.id), token, items);
+          }
+        });
+
+        res.json({ qr_payload: qrPayload, short_token: shortToken, expires_at: expires });
       });
-
-      res.json({ qr_payload: qrPayload, short_token: shortToken, expires_at: expires });
-    });
+  });
 });
 
 // Get QR data for display
@@ -116,8 +131,10 @@ router.get('/:id/qr', (req, res) => {
   const db = req.app.locals.db;
   db.get('SELECT id, verification_token, short_token, token_expires_at FROM pickup_orders WHERE id = ? AND status = ?',
     [req.params.id, 'pending_verification'], (err, order) => {
+      if (err) return res.status(500).json({ error: err.message });
       if (!order) return res.status(404).json({ error: 'No pending verification' });
       db.all('SELECT id, category, actual_weight FROM pickup_items WHERE order_id = ?', [order.id], (err, items) => {
+        if (err) return res.status(500).json({ error: err.message });
         const payload = JSON.stringify({ order_id: order.id, token: order.verification_token, items });
         res.json({ qr_payload: payload, short_token: order.short_token, expires_at: order.token_expires_at });
       });
@@ -130,12 +147,27 @@ router.post('/:id/verify', (req, res) => {
   if (!token) return res.status(400).json({ error: 'token required' });
 
   const db = req.app.locals.db;
-  db.get('SELECT * FROM pickup_orders WHERE id = ? AND (verification_token = ? OR short_token = ?)',
-    [req.params.id, token, token], (err, order) => {
+  const tokenUpper = token.toUpperCase();
+  console.log(`[VERIFY] Order #${req.params.id} — received token: "${token}" (upper: "${tokenUpper}")`);
+
+  // First, let's see what the order actually has
+  db.get('SELECT id, status, verification_token, short_token, token_expires_at FROM pickup_orders WHERE id = ?',
+    [req.params.id], (err, debugOrder) => {
+      if (debugOrder) {
+        console.log(`[VERIFY] DB order #${debugOrder.id} — status: ${debugOrder.status}, short_token: "${debugOrder.short_token}", verification_token: "${debugOrder.verification_token?.substring(0,10)}...", expires: ${debugOrder.token_expires_at}`);
+      } else {
+        console.log(`[VERIFY] No order found with id ${req.params.id}`);
+      }
+    });
+
+  db.get('SELECT * FROM pickup_orders WHERE id = ? AND (verification_token = ? OR UPPER(short_token) = ?)',
+    [req.params.id, token, tokenUpper], (err, order) => {
       if (err) return res.status(500).json({ error: err.message });
-      if (!order) return res.status(400).json({ error: 'Invalid token' });
-      if (new Date(order.token_expires_at) < new Date()) return res.status(400).json({ error: 'Token expired' });
+      if (!order) return res.status(400).json({ error: 'Token tidak valid. Pastikan token yang dimasukkan sesuai.' });
+      if (new Date(order.token_expires_at) < new Date()) return res.status(400).json({ error: 'Token sudah kedaluwarsa. Silakan minta kurir men-generate token baru.' });
       
+      console.log(`[VERIFY] Token matched for order #${order.id}! Proceeding to complete...`);
+
       // Calculate points from actual weights
       db.all('SELECT * FROM pickup_items WHERE order_id = ?', [order.id], (err, items) => {
         let totalPoints = 0;
@@ -151,10 +183,10 @@ router.post('/:id/verify', (req, res) => {
 
         db.serialize(() => {
           // Complete order with atomic status check
-          db.run('UPDATE pickup_orders SET status = ?, completed_at = ? WHERE id = ? AND status = ? AND (verification_token = ? OR short_token = ?)',
-            ['completed', new Date().toISOString(), order.id, 'pending_verification', token, token], function(err) {
+          db.run('UPDATE pickup_orders SET status = ?, completed_at = ? WHERE id = ? AND status = ? AND (verification_token = ? OR UPPER(short_token) = ?)',
+            ['completed', new Date().toISOString(), order.id, 'pending_verification', token, tokenUpper], function(err) {
               if (err) return res.status(500).json({ error: err.message });
-              if (this.changes === 0) return res.status(400).json({ error: 'Order already verified or token invalid' });
+              if (this.changes === 0) return res.status(400).json({ error: 'Order sudah diverifikasi sebelumnya.' });
 
               // Add points to user
               db.run('UPDATE users SET points = points + ?, total_kg = total_kg + ?, total_co2 = total_co2 + ?, total_setor_count = total_setor_count + 1 WHERE id = ?',
@@ -162,6 +194,9 @@ router.post('/:id/verify', (req, res) => {
               // Create transaction record
               db.run('INSERT INTO transactions (user_id, type, title, description, points) VALUES (?, ?, ?, ?, ?)',
                 [order.user_id, 'setor', `Setor Multi Kategori (Verified)`, desc, totalPoints]);
+
+              // Emit real-time notification to user
+              req.app.locals.notificationService.emitVerificationCompleted(order.user_id, order.id, totalPoints);
 
               res.json({ success: true, points_earned: totalPoints, total_kg: totalKg, items });
             });
@@ -178,10 +213,12 @@ router.get('/courier/:courier_id/tasks', (req, res) => {
     WHERE (po.courier_id = ? OR (po.courier_id IS NULL AND po.status = 'waiting'))
     AND po.status != 'completed'
     ORDER BY po.created_at DESC`, [req.params.courier_id], (err, orders) => {
+      if (err) return res.status(500).json({ error: err.message });
       if (!orders?.length) return res.json([]);
       let completed = 0;
       orders.forEach((order, i) => {
         db.all('SELECT * FROM pickup_items WHERE order_id = ?', [order.id], (err, items) => {
+          if (err) console.error(err);
           orders[i].items = items || [];
           completed++;
           if (completed === orders.length) res.json(orders);

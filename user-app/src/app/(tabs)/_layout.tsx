@@ -1,88 +1,62 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/useAuthStore';
-import { initSocketConnection, disconnectSocket } from '../../services/socketService';
-import NotificationBanner from '../../components/NotificationBanner';
 
 export default function TabLayout() {
-  const { user } = useAuthStore();
-  const [activeNotification, setActiveNotification] = useState<any>(null);
-
-  useEffect(() => {
-    if (user) {
-      initSocketConnection(user.id, (notification) => {
-        setActiveNotification(notification);
-      });
-    }
-
-    return () => {
-      disconnectSocket();
-    };
-  }, [user]);
-
   return (
-    <>
-      {activeNotification && (
-        <NotificationBanner 
-          notification={activeNotification} 
-          onDismiss={() => setActiveNotification(null)} 
-        />
-      )}
       <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#00bfa5',
-        tabBarInactiveTintColor: '#999',
-        tabBarStyle: {
-          borderTopWidth: 0,
-          elevation: 10,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.1,
-          shadowRadius: 5,
-          height: 60,
-          paddingBottom: 10,
-          paddingTop: 5,
-        },
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Beranda',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="katalog"
-        options={{
-          title: 'Katalog',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'gift' : 'gift-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="riwayat"
-        options={{
-          title: 'Riwayat',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'time' : 'time-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profil"
-        options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
-    </>
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: '#00bfa5',
+          tabBarInactiveTintColor: '#999',
+          tabBarStyle: {
+            borderTopWidth: 0,
+            elevation: 10,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -3 },
+            shadowOpacity: 0.1,
+            shadowRadius: 5,
+            height: 60,
+            paddingBottom: 10,
+            paddingTop: 5,
+          },
+        }}>
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Beranda',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="katalog"
+          options={{
+            title: 'Katalog',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'gift' : 'gift-outline'} size={24} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="riwayat"
+          options={{
+            title: 'Riwayat',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'time' : 'time-outline'} size={24} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="profil"
+          options={{
+            title: 'Profil',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
+            ),
+          }}
+        />
+      </Tabs>
   );
 }

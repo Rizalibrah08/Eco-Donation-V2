@@ -107,6 +107,25 @@ class NotificationService {
       });
     }
   }
+
+  emitVerificationCompleted(userId, orderId, pointsEarned) {
+    this.emitNotification(
+      userId,
+      orderId,
+      'verification_completed',
+      'Verifikasi Berhasil!',
+      `Kurir telah menyelesaikan verifikasi. Anda mendapatkan tambahan ${pointsEarned} poin.`
+    );
+
+    const socketId = this.userSockets[userId];
+    if (socketId && this.io.sockets.sockets.get(socketId)) {
+      this.io.to(socketId).emit('verification_completed', {
+        orderId,
+        pointsEarned,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
 }
 
 module.exports = NotificationService;

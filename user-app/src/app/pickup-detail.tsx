@@ -12,32 +12,37 @@ export default function PickupDetailScreen() {
   const router = useRouter();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
+
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [qrData, setQrData] = useState<any>(null);
 
   useEffect(() => {
     if (id) fetchDetail();
-    
+
     const socket = getSocket();
     if (socket) {
       socket.on('qr_ready', (data: any) => {
         if (data.orderId === parseInt(id as string)) {
-          setQrData(data);
+          setQrData({
+            token: JSON.stringify({ order_id: data.orderId, token: data.token, items: data.items }),
+            shortToken: data.shortToken
+          });
           setShowApprovalModal(true);
           fetchDetail();
         }
       });
 
-      socket.on('notification', (data: any) => {
-        if (data.orderId === parseInt(id as string) && data.type !== 'qr_ready') {
+      socket.on('verification_completed', (data: any) => {
+        if (data.orderId === parseInt(id as string)) {
+          setShowApprovalModal(false);
           fetchDetail();
         }
       });
     }
-    
+
     return () => {
       socket?.off('qr_ready');
+      socket?.off('verification_completed');
     };
   }, [id]);
 
@@ -48,10 +53,10 @@ export default function PickupDetailScreen() {
       if (response.data.status === 'pending_verification') {
         const qrRes = await api.get(`/pickups/${id}/qr`).catch(() => null);
         if (qrRes?.data) {
-           setQrData({
-             token: qrRes.data.qr_payload,
-             shortToken: qrRes.data.short_token
-           });
+          setQrData({
+            token: qrRes.data.qr_payload,
+            shortToken: qrRes.data.short_token
+          });
         }
       }
     } catch (error) {
@@ -126,7 +131,7 @@ export default function PickupDetailScreen() {
             <Ionicons name="time-outline" size={20} color="#666" />
             <Text style={styles.infoText}>Dibuat: {new Date(order.created_at).toLocaleString()}</Text>
           </View>
-          
+
           {order.completed_at && (
             <View style={styles.infoRow}>
               <Ionicons name="checkmark-circle-outline" size={20} color="#2e7d32" />
@@ -167,11 +172,11 @@ export default function PickupDetailScreen() {
             <Text style={styles.actionDesc}>
               Biarkan kurir men-scan QR Code di bawah ini atau sebutkan Token untuk menyelesaikan proses dan mencairkan poin.
             </Text>
-            
+
             <View style={styles.qrCodeBox}>
               <QRCodeDisplay value={qrData.token} size={200} />
             </View>
-            
+
             <View style={styles.tokenBox}>
               <Text style={styles.tokenLabel}>TOKEN</Text>
               <Text style={styles.tokenText}>{qrData.shortToken}</Text>
@@ -190,14 +195,14 @@ export default function PickupDetailScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={{marginBottom: 15}}>
+            <View style={{ marginBottom: 15 }}>
               <Ionicons name="checkmark-circle" size={60} color="#00bfa5" />
             </View>
             <Text style={styles.modalTitle}>Verifikasi Penjemputan</Text>
             <Text style={styles.modalMessage}>
               Kurir telah selesai menimbang sampah Anda. Lanjutkan untuk menampilkan kode verifikasi.
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalButton}
               onPress={() => setShowApprovalModal(false)}
             >

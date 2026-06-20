@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import ConfirmModal from '../components/ConfirmModal';
+import WarningModal from '../components/WarningModal';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,8 +19,8 @@ const RATES = {
 export default function SetorScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  
-  const [categories, setCategories] = useState<{name: string, weight: string}[]>([
+
+  const [categories, setCategories] = useState<{ name: string, weight: string }[]>([
     { name: 'Botol Plastik', weight: '' }
   ]);
   const [address, setAddress] = useState('');
@@ -27,6 +28,8 @@ export default function SetorScreen() {
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const [warningMessage, setWarningMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   const availableCategories = Object.keys(RATES);
@@ -57,12 +60,14 @@ export default function SetorScreen() {
 
   const handleSubmit = () => {
     if (!address.trim()) {
-      Alert.alert('Error', 'Silakan isi alamat penjemputan.');
+      setWarningMessage('Silakan isi alamat penjemputan.');
+      setShowWarning(true);
       return;
     }
 
     if (!scheduledAt.trim()) {
-      Alert.alert('Error', 'Silakan isi jadwal penjemputan.');
+      setWarningMessage('Silakan isi jadwal penjemputan.');
+      setShowWarning(true);
       return;
     }
 
@@ -71,7 +76,8 @@ export default function SetorScreen() {
       .map(c => ({ category: c.name, estimated_weight: parseFloat(c.weight) }));
 
     if (items.length === 0) {
-      Alert.alert('Error', 'Silakan masukkan minimal 1 barang dengan berat > 0.');
+      setWarningMessage('Silakan masukkan minimal 1 barang dengan berat > 0.');
+      setShowWarning(true);
       return;
     }
 
@@ -81,7 +87,7 @@ export default function SetorScreen() {
 
   const handleConfirmSubmit = async () => {
     setShowConfirmModal(false);
-    
+
     const items = categories
       .filter(c => parseFloat(c.weight) > 0)
       .map(c => ({ category: c.name, estimated_weight: parseFloat(c.weight) }));
@@ -94,19 +100,20 @@ export default function SetorScreen() {
         scheduled_at: scheduledAt,
         items
       });
-      
+
       setSuccessMessage('Permintaan penjemputan berhasil dibuat. Kurir akan segera menuju lokasimu!');
       setShowSuccessModal(true);
     } catch (error: any) {
-      Alert.alert('Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan server');
+      setWarningMessage(error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan server');
+      setShowWarning(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
       <LinearGradient colors={['#004d40', '#00bfa5']} style={styles.header}>
@@ -118,7 +125,7 @@ export default function SetorScreen() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionTitle}>Detail Barang</Text>
-        
+
         {categories.map((item, index) => (
           <View key={index} style={styles.itemCard}>
             <View style={styles.row}>
@@ -220,7 +227,7 @@ export default function SetorScreen() {
             </View>
             <Text style={styles.modalTitle}>Sukses</Text>
             <Text style={styles.modalMessage}>{successMessage}</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
                 setShowSuccessModal(false);
@@ -239,6 +246,13 @@ export default function SetorScreen() {
         message={`Anda akan menyetorkan ${categories.filter(c => parseFloat(c.weight) > 0).length} jenis barang (Total: ${categories.reduce((sum, c) => sum + (parseFloat(c.weight) || 0), 0)} Kg).\nEstimasi Poin: +${estimatedPoints.toLocaleString('id-ID')}\n\nLanjutkan?`}
         onConfirm={handleConfirmSubmit}
         onCancel={() => setShowConfirmModal(false)}
+      />
+
+      <WarningModal
+        visible={showWarning}
+        title="Peringatan"
+        message={warningMessage}
+        onConfirm={() => setShowWarning(false)}
       />
     </KeyboardAvoidingView>
   );

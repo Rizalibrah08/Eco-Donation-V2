@@ -1,36 +1,76 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import ConfirmModal from '../../components/ConfirmModal';
+import WarningModal from '../../components/WarningModal';
+import ErrorModal from '../../components/ErrorModal';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import api from '../../services/api';
+import { globalGivingService, ExternalCampaign } from '../../services/globalGivingService';
 import { useAuthStore } from '../../store/useAuthStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function CampaignDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { user, updateUserPoints } = useAuthStore();
   
-  const [campaign, setCampaign] = useState<any>(null);
+  const [campaign, setCampaign] = useState<ExternalCampaign | null>(null);
   const [loading, setLoading] = useState(true);
   const [donateAmount, setDonateAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
+  const [warningMessage, setWarningMessage] = useState('');
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [donatedAmount, setDonatedAmount] = useState(0);
+  const [communityPoints, setCommunityPoints] = useState(0); // Poin dari DB lokal
+
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/katalog');
+    }
+  };
 
   useEffect(() => {
-    if (id) fetchCampaignDetail();
+    if (id) {
+      fetchCampaignDetail();
+      fetchCommunityPoints();
+    }
   }, [id]);
+
+  const fetchCommunityPoints = async () => {
+    try {
+      // Untuk kebutuhan prototipe, simpan poin komunitas lokal di AsyncStorage
+      // Di produksi, fetch dari: await api.get(`/donations/campaign/${id}/total`)
+      const savedPoints = await AsyncStorage.getItem(`@community_points_${id}`);
+      if (savedPoints !== null) {
+        setCommunityPoints(parseInt(savedPoints, 10));
+      } else {
+        setCommunityPoints(0);
+      }
+    } catch (error) {
+      setCommunityPoints(0);
+    }
+  };
 
   const fetchCampaignDetail = async () => {
     try {
-      const response = await api.get(`/campaigns/${id}`);
-      setCampaign(response.data);
+      const data = await globalGivingService.fetchCampaignById(id as string);
+      if (data) {
+        setCampaign(data);
+      } else {
+        throw new Error('Not found');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Gagal memuat detail kampanye.');
-      router.back();
+      setErrorMessage('Gagal memuat detail kampanye.');
+      setShowError(true);
+      handleGoBack();
     } finally {
       setLoading(false);
     }
@@ -40,16 +80,24 @@ export default function CampaignDetailScreen() {
     const amount = parseInt(donateAmount.replace(/\D/g, ''), 10);
     
     if (!amount || amount <= 0) {
-      Alert.alert('Error', 'Masukkan nominal donasi yang valid.');
+      setWarningMessage('Masukkan nominal donasi yang valid.');
+      setShowWarning(true);
       return;
     }
 
     if (user && user.points < amount) {
-      Alert.alert('Saldo Tidak Cukup', `Saldo Anda: ${user.points} Poin. Anda membutuhkan ${amount - user.points} Poin lagi.`);
+      setWarningMessage(`Saldo Anda: ${user.points} Poin. Anda membutuhkan ${amount - user.points} Poin lagi.`);
+      setShowWarning(true);
       return;
     }
 
     setShowConfirmModal(true);
+  };
+
+  const handleMaxPoints = () => {
+    if (user && user.points) {
+      setDonateAmount(user.points.toString());
+    }
   };
 
   const handleConfirmDonate = async () => {
@@ -60,7 +108,7 @@ export default function CampaignDetailScreen() {
     try {
       await api.post('/donations', {
         user_id: user?.id,
-        campaign_id: parseInt(id as string, 10),
+        campaign_id: id as string, // Simpan ID campaign eksternal
         points: amount
       });
       
@@ -69,9 +117,13 @@ export default function CampaignDetailScreen() {
       }
 
       setDonatedAmount(amount);
+      const newCommunityPoints = communityPoints + amount;
+      setCommunityPoints(newCommunityPoints);
+      await AsyncStorage.setItem(`@community_points_${id}`, newCommunityPoints.toString());
       setShowSuccessModal(true);
     } catch (error: any) {
-      Alert.alert('Donasi Gagal', error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan');
+      setErrorMessage(error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan');
+      setShowError(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -99,7 +151,7 @@ export default function CampaignDetailScreen() {
             colors={['rgba(0,0,0,0.5)', 'transparent']}
             style={styles.imageOverlay}
           >
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
           </LinearGradient>
@@ -118,7 +170,7 @@ export default function CampaignDetailScreen() {
                 <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
               </View>
               <View style={styles.progressTextContainer}>
-                <Text style={styles.progressText}>{progress.toFixed(0)}% Terkumpul</Text>
+                <Text style={styles.progressText}>{progress.toFixed(0)}% Pendanaan Global</Text>
               </View>
             </View>
             
@@ -132,6 +184,14 @@ export default function CampaignDetailScreen() {
                 <Text style={styles.statLabel}>Target</Text>
                 <Text style={styles.statValue}>Rp {(campaign.target_amount || 0).toLocaleString('id-ID')}</Text>
               </View>
+            </View>
+
+            <View style={styles.localStatsContainer}>
+              <View style={styles.localStatsHeader}>
+                <Ionicons name="leaf" size={16} color="#00bfa5" />
+                <Text style={styles.localStatsTitle}>Kontribusi Komunitas Eco-Donation</Text>
+              </View>
+              <Text style={styles.localStatsValue}>{communityPoints.toLocaleString('id-ID')} Poin Tersalurkan</Text>
             </View>
           </View>
 
@@ -149,6 +209,9 @@ export default function CampaignDetailScreen() {
                 value={donateAmount}
                 onChangeText={setDonateAmount}
               />
+              <TouchableOpacity style={styles.maxButton} onPress={handleMaxPoints}>
+                <Text style={styles.maxButtonText}>MAX</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.balanceInfo}>Saldo Anda: {user?.points?.toLocaleString('id-ID') || 0} Poin</Text>
           </View>
@@ -176,7 +239,7 @@ export default function CampaignDetailScreen() {
         visible={showSuccessModal}
         onRequestClose={() => {
           setShowSuccessModal(false);
-          router.back();
+          handleGoBack();
         }}
       >
         <View style={styles.modalOverlay}>
@@ -192,7 +255,7 @@ export default function CampaignDetailScreen() {
               style={styles.modalButton}
               onPress={() => {
                 setShowSuccessModal(false);
-                router.back();
+                handleGoBack();
               }}
             >
               <Text style={styles.modalButtonText}>Selesai</Text>
@@ -207,6 +270,20 @@ export default function CampaignDetailScreen() {
         message={`Anda akan mendonasikan Rp ${(parseInt(donateAmount.replace(/\D/g, ''), 10) || 0).toLocaleString('id-ID')} (${parseInt(donateAmount.replace(/\D/g, ''), 10) || 0} Poin) ke kampanye "${campaign.title}".\n\nLanjutkan?`}
         onConfirm={handleConfirmDonate}
         onCancel={() => setShowConfirmModal(false)}
+      />
+
+      <WarningModal
+        visible={showWarning}
+        title="Perhatian"
+        message={warningMessage}
+        onConfirm={() => setShowWarning(false)}
+      />
+
+      <ErrorModal
+        visible={showError}
+        title="Donasi Gagal"
+        message={errorMessage}
+        onConfirm={() => setShowError(false)}
       />
     </KeyboardAvoidingView>
   );
@@ -284,6 +361,28 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 25,
+  },
+  localStatsContainer: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  localStatsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  localStatsTitle: {
+    fontSize: 12,
+    color: '#00bfa5',
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
+  localStatsValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
   },
   progressContainer: {
     marginBottom: 15,
@@ -372,6 +471,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
+  },
+  maxButton: {
+    backgroundColor: '#e0f2f1',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
+  maxButtonText: {
+    color: '#00695c',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
   balanceInfo: {
     marginTop: 10,

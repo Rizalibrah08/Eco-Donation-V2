@@ -167,7 +167,7 @@ export default function ProfilScreen() {
               <View style={styles.donutContainer}>
                 <View style={styles.svgWrapper}>
                   <Svg height="150" width="150" viewBox="0 0 160 160">
-                    <G rotation="-90" origin="80, 80">
+                    <G transform="rotate(-90, 80, 80)">
                       {distWithPercent.map((d, i) => {
                         const previousPercents = distWithPercent.slice(0, i).reduce((sum, item) => sum + item.percent, 0);
                         const radius = 60;

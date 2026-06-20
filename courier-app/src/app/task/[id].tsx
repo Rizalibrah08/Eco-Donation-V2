@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import ConfirmModal from '../../components/ConfirmModal';
+import SuccessModal from '../../components/SuccessModal';
+import WarningModal from '../../components/WarningModal';
+import ErrorModal from '../../components/ErrorModal';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
@@ -10,13 +13,14 @@ import { Camera, CameraView } from 'expo-camera';
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  
+
   const [task, setTask] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showWeighConfirmModal, setShowWeighConfirmModal] = useState(false);
-  
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
   // State for actual weights input
   const [actualWeights, setActualWeights] = useState<Record<string, string>>({});
   const [qrToken, setQrToken] = useState<string | null>(null);
@@ -26,6 +30,11 @@ export default function TaskDetailScreen() {
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [showTokenInput, setShowTokenInput] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
+  
+  const [showWarning, setShowWarning] = useState(false);
+  const [warningMessage, setWarningMessage] = useState('');
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     fetchTaskDetail();
@@ -35,13 +44,14 @@ export default function TaskDetailScreen() {
     try {
       const response = await api.get(`/pickups/${id}`);
       setTask(response.data);
-      
+
       if (response.data.status === 'pending_verification') {
         // Just flag that it has qr_token so UI shows options
         setQrToken('pending');
       }
     } catch (error) {
-      Alert.alert('Error', 'Gagal memuat tugas.');
+      setErrorMessage('Gagal memuat tugas.');
+      setShowError(true);
       if (router.canGoBack()) {
         router.back();
       } else {
@@ -62,10 +72,12 @@ export default function TaskDetailScreen() {
     try {
       const { user } = useAuthStore.getState();
       await api.patch(`/pickups/${id}/status`, { status: 'on_the_way', courier_id: user?.id });
-      Alert.alert('Sukses', 'Tugas berhasil diterima! Segera menuju lokasi pengguna.');
+      setWarningMessage('Tugas berhasil diterima! Segera menuju lokasi pengguna.');
+      setShowWarning(true); // Using warning modal simply as a non-points info
       fetchTaskDetail(); // Refresh data
     } catch (error) {
-      Alert.alert('Gagal', 'Tidak dapat menerima tugas.');
+      setErrorMessage('Tidak dapat menerima tugas.');
+      setShowError(true);
     } finally {
       setProcessing(false);
     }
@@ -86,7 +98,8 @@ export default function TaskDetailScreen() {
 
     const invalid = items.some((i: any) => isNaN(i.actual_weight) || i.actual_weight <= 0);
     if (invalid) {
-      Alert.alert('Input Tidak Valid', 'Silakan masukkan berat aktual (Kg) untuk semua barang.');
+      setWarningMessage('Silakan masukkan berat aktual (Kg) untuk semua barang.');
+      setShowWarning(true);
       return;
     }
 
@@ -103,10 +116,12 @@ export default function TaskDetailScreen() {
       }));
       const response = await api.post(`/pickups/${id}/weigh`, { items });
       setQrToken('pending');
-      Alert.alert('Sukses', 'Data terkirim ke User. Silakan minta User menampilkan QR atau Token untuk diverifikasi.');
+      setWarningMessage('Data terkirim ke User. Silakan minta User menampilkan QR atau Token untuk diverifikasi.');
+      setShowWarning(true);
       fetchTaskDetail();
     } catch (error) {
-      Alert.alert('Gagal', 'Tidak dapat memproses berat aktual.');
+      setErrorMessage('Tidak dapat memproses berat aktual.');
+      setShowError(true);
     } finally {
       setProcessing(false);
     }
@@ -118,7 +133,8 @@ export default function TaskDetailScreen() {
     if (status === 'granted') {
       setShowScanner(true);
     } else {
-      Alert.alert('Akses Ditolak', 'Akses kamera dibutuhkan untuk scan QR.');
+      setErrorMessage('Akses kamera dibutuhkan untuk scan QR.');
+      setShowError(true);
     }
   };
 
@@ -128,7 +144,11 @@ export default function TaskDetailScreen() {
   };
 
   const handleInputToken = () => {
-    if (!tokenInput.trim()) return;
+    if (!tokenInput.trim()) {
+      setWarningMessage('Silakan masukkan token verifikasi.');
+      setShowWarning(true);
+      return;
+    }
     verifyToken(tokenInput.trim());
   };
 
@@ -136,17 +156,26 @@ export default function TaskDetailScreen() {
     setProcessing(true);
     try {
       let finalToken = tokenStr;
+      let orderIdFromToken = null;
       try {
         const parsed = JSON.parse(tokenStr);
         if (parsed.token) finalToken = parsed.token;
-      } catch (e) {}
+        if (parsed.order_id) orderIdFromToken = parsed.order_id;
+      } catch (e) { }
+
+      if (orderIdFromToken && String(orderIdFromToken) !== String(id)) {
+        setErrorMessage('QR Code ini untuk tugas penjemputan yang berbeda.');
+        setProcessing(false);
+        setShowTokenInput(false);
+        setShowError(true);
+        return;
+      }
 
       const response = await api.post(`/pickups/${id}/verify`, { token: finalToken });
-      Alert.alert('Sukses', 'Verifikasi berhasil! Poin telah ditransfer ke User.', [
-        { text: 'Selesai', onPress: () => router.replace('/(tabs)') }
-      ]);
+      setShowSuccessModal(true);
     } catch (error: any) {
-      Alert.alert('Gagal', error.response?.data?.error || 'Token tidak valid atau sudah kadaluarsa.');
+      setErrorMessage(error.response?.data?.error || 'Token tidak valid atau sudah kadaluarsa.');
+      setShowError(true);
     } finally {
       setProcessing(false);
       setShowTokenInput(false);
@@ -181,20 +210,20 @@ export default function TaskDetailScreen() {
         {qrToken ? (
           <View style={styles.qrContainer}>
             <Text style={styles.qrTitle}>Verifikasi dari Pengguna</Text>
-            <Ionicons name="qr-code-outline" size={80} color="#1565c0" style={{marginBottom: 20}} />
+            <Ionicons name="qr-code-outline" size={80} color="#1565c0" style={{ marginBottom: 20 }} />
             <Text style={styles.qrInstruction}>
               Pengguna telah menerima rincian berat di aplikasinya. Silakan Scan QR Code dari layar Pengguna, atau masukkan Token secara manual.
             </Text>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#1565c0', width: '100%', marginTop: 20 }]} 
+
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#1565c0', width: '100%', marginTop: 20 }]}
               onPress={openScanner}
             >
               <Text style={styles.actionButtonText}>Scan QR Code</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#e65100', width: '100%', marginTop: 15 }]} 
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#e65100', width: '100%', marginTop: 15 }]}
               onPress={() => setShowTokenInput(true)}
             >
               <Text style={styles.actionButtonText}>Masukkan Token</Text>
@@ -204,7 +233,7 @@ export default function TaskDetailScreen() {
           <>
             <View style={styles.infoCard}>
               <Text style={styles.sectionTitle}>Informasi Penjemputan</Text>
-              
+
               <View style={styles.infoRow}>
                 <Ionicons name="person" size={20} color="#1565c0" style={styles.infoIcon} />
                 <View>
@@ -212,7 +241,7 @@ export default function TaskDetailScreen() {
                   <Text style={styles.infoValue}>{task.user_name}</Text>
                 </View>
               </View>
-              
+
               <View style={styles.infoRow}>
                 <Ionicons name="location" size={20} color="#1565c0" style={styles.infoIcon} />
                 <View style={{ flex: 1 }}>
@@ -225,12 +254,12 @@ export default function TaskDetailScreen() {
                 <Ionicons name="information-circle" size={20} color="#1565c0" style={styles.infoIcon} />
                 <View>
                   <Text style={styles.infoLabel}>Status</Text>
-                  <Text style={[styles.infoValue, { 
-                    color: task.status === 'on_the_way' ? '#e65100' : 
-                           task.status === 'pending_verification' ? '#ffb300' : '#1565c0' 
+                  <Text style={[styles.infoValue, {
+                    color: task.status === 'on_the_way' ? '#e65100' :
+                      task.status === 'pending_verification' ? '#ffb300' : '#1565c0'
                   }]}>
-                    {task.status === 'waiting' ? 'Menunggu Penjemputan' : 
-                     task.status === 'pending_verification' ? 'Menunggu Verifikasi QR' : 'Kurir Menuju Lokasi'}
+                    {task.status === 'waiting' ? 'Menunggu Penjemputan' :
+                      task.status === 'pending_verification' ? 'Menunggu Verifikasi QR' : 'Kurir Menuju Lokasi'}
                   </Text>
                 </View>
               </View>
@@ -238,14 +267,14 @@ export default function TaskDetailScreen() {
 
             <View style={styles.itemsCard}>
               <Text style={styles.sectionTitle}>Daftar Barang & Timbangan</Text>
-              
+
               {task.items && task.items.map((item: any, index: number) => (
                 <View key={index} style={styles.itemRow}>
                   <View style={styles.itemDetails}>
                     <Text style={styles.itemCategory}>{item.category}</Text>
                     <Text style={styles.itemEst}>Estimasi: {item.estimated_weight} Kg</Text>
                   </View>
-                  
+
                   {task.status === 'on_the_way' ? (
                     <View style={styles.weightInputContainer}>
                       <TextInput
@@ -272,16 +301,16 @@ export default function TaskDetailScreen() {
       {!qrToken && (
         <View style={styles.footer}>
           {task.status === 'waiting' ? (
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#e65100' }]} 
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#e65100' }]}
               onPress={handleAcceptTask}
               disabled={processing}
             >
               {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.actionButtonText}>Terima & Menuju Lokasi</Text>}
             </TouchableOpacity>
           ) : task.status === 'on_the_way' ? (
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#1565c0' }]} 
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#1565c0' }]}
               onPress={handleGenerateQRPress}
               disabled={processing}
             >
@@ -311,9 +340,20 @@ export default function TaskDetailScreen() {
         onCancel={() => setShowWeighConfirmModal(false)}
       />
 
+      {/* Success Modal */}
+      <SuccessModal
+        visible={showSuccessModal}
+        title="Verifikasi Berhasil"
+        message="Poin telah ditransfer ke User."
+        onConfirm={() => {
+          setShowSuccessModal(false);
+          router.replace('/(tabs)');
+        }}
+      />
+
       {/* Scanner Modal */}
       <Modal visible={showScanner} animationType="slide" transparent={false}>
-        <View style={{flex: 1, backgroundColor: 'black'}}>
+        <View style={{ flex: 1, backgroundColor: 'black' }}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => setShowScanner(false)}>
               <Ionicons name="close" size={28} color="#333" />
@@ -331,7 +371,7 @@ export default function TaskDetailScreen() {
               }}
             />
           ) : (
-            <View style={styles.loader}><Text style={{color: 'white'}}>Meminta akses kamera...</Text></View>
+            <View style={styles.loader}><Text style={{ color: 'white' }}>Meminta akses kamera...</Text></View>
           )}
         </View>
       </Modal>
@@ -350,18 +390,31 @@ export default function TaskDetailScreen() {
               maxLength={6}
               autoCapitalize="characters"
             />
-            <View style={{flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 20}}>
-              <TouchableOpacity style={[styles.modalBtn, {backgroundColor: '#ccc'}]} onPress={() => setShowTokenInput(false)}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 20 }}>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#ccc' }]} onPress={() => setShowTokenInput(false)}>
                 <Text style={styles.modalBtnText}>Batal</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, {backgroundColor: '#1565c0'}]} onPress={handleInputToken}>
-                <Text style={[styles.modalBtnText, {color: '#fff'}]}>Verifikasi</Text>
+              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#1565c0' }]} onPress={handleInputToken}>
+                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Verifikasi</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
+      <WarningModal
+        visible={showWarning}
+        title="Perhatian"
+        message={warningMessage}
+        onConfirm={() => setShowWarning(false)}
+      />
+
+      <ErrorModal
+        visible={showError}
+        title="Gagal"
+        message={errorMessage}
+        onConfirm={() => setShowError(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

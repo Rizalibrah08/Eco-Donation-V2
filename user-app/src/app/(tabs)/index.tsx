@@ -39,7 +39,7 @@ export default function HomeScreen() {
   const quickActions = [
     { id: 'setor', title: 'Setor Sampah', icon: 'leaf-outline', color: '#00bfa5', route: '/setor' },
     { id: 'donasi', title: 'Salurkan Donasi', icon: 'heart-outline', color: '#ff5252', route: '/(tabs)/katalog' },
-    { id: 'scan', title: 'Verifikasi Kurir', icon: 'qr-code-outline', color: '#448aff', route: '/scan' },
+    { id: 'riwayat', title: 'Riwayat Transaksi', icon: 'time-outline', color: '#448aff', route: '/(tabs)/riwayat' },
     { id: 'peringkat', title: 'Papan Peringkat', icon: 'trophy-outline', color: '#ffb300', route: '/(tabs)/profil' },
   ];
 
