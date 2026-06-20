@@ -1,11 +1,15 @@
 # 🌿 Eco-Donation Assistant
 
-Platform mobile yang memfasilitasi pengguna untuk menyetorkan sampah daur ulang dan mengonversinya menjadi **Poin Donasi** yang dapat disalurkan ke kampanye sosial dan panti asuhan.
+**Platform mobile berbasis React Native yang mengintegrasikan manajemen sampah daur ulang dengan sistem donasi sosial.**
 
-![Expo](https://img.shields.io/badge/Expo-SDK_54-000020?logo=expo)
-![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?logo=react)
-![Express](https://img.shields.io/badge/Express-5.x-000000?logo=express)
-![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite)
+Eco-Donation Assistant memfasilitasi pengguna untuk menyetorkan sampah daur ulang yang dikonversi menjadi **Poin Donasi**, kemudian disalurkan ke kampanye sosial, panti asuhan, dan inisiatif kemanusiaan lainnya. Sistem ini dirancang dengan mekanisme verifikasi on-site untuk memastikan transparansi dan mencegah fraud.
+
+![Expo](https://img.shields.io/badge/Expo-SDK_54-000020?logo=expo&logoColor=white)
+![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?logo=react&logoColor=white)
+![Express](https://img.shields.io/badge/Express-5.x-000000?logo=express&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)
+![Socket.io](https://img.shields.io/badge/Socket.io-4.x-010101?logo=socket.io&logoColor=white)
+![Zustand](https://img.shields.io/badge/Zustand-State_Management-764ABC)
 
 ---
 
@@ -18,6 +22,32 @@ Eco-Donation Assistant terdiri dari **3 komponen** yang saling terintegrasi:
 | `user-app` | Expo (React Native) | Aplikasi pengguna untuk setor sampah, donasi, dan tracking |
 | `courier-app` | Expo (React Native) | Aplikasi kurir untuk penjemputan dan verifikasi berat |
 | `backend-api` | Express + SQLite | REST API sebagai pusat data dan logika bisnis |
+
+---
+
+## ✨ Fitur Utama
+
+### 👤 User App
+- **Sistem Poin Daur Ulang**: Konversi sampah menjadi poin dengan rate transparan per kategori
+- **Verifikasi On-Site**: Token-based verification untuk mencegah fraud
+- **Katalog Kampanye**: Jelajahi dan donasikan poin ke berbagai kampanye sosial
+- **Real-time Notifications**: Update status penjemputan dan poin masuk secara langsung
+- **Impact Portfolio**: Visualisasi dampak lingkungan dari kontribusi daur ulang
+- **Leaderboard & Gamifikasi**: Sistem peringkat dan koleksi lencana pencapaian
+- **Riwayat Transaksi**: Tracking lengkap mutasi poin dan donasi
+- **Profile Management**: Pengaturan akun dan pusat bantuan terintegrasi
+
+### 🚚 Courier App
+- **Task Management**: Dashboard tugas penjemputan real-time
+- **Weighing System**: Input berat aktual dengan timbangan digital on-site
+- **Token Generator**: Generate verification token untuk user
+- **Status Tracking**: Update status penjemputan secara bertahap
+
+### 🔐 Security & Transparency
+- Token verification dengan expiry 30 menit
+- Perhitungan poin berdasarkan berat aktual, bukan estimasi
+- Audit trail lengkap untuk setiap transaksi
+- Separated concerns antara user dan courier apps
 
 ---
 
@@ -182,6 +212,7 @@ Cek IP laptop: `ipconfig` (Windows) atau `ifconfig` (Mac/Linux).
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
 | GET | `/api/users/:id` | Profil & saldo user |
+| PUT | `/api/users/:id` | Update profil user |
 | GET | `/api/users/:id/transactions` | Riwayat mutasi poin |
 | GET | `/api/users/:id/leaderboard` | Papan peringkat |
 | GET | `/api/users/:id/distribution` | Distribusi kategori sampah |
@@ -252,6 +283,7 @@ Verifikasi dilakukan secara **on-site** untuk mencegah kecurangan berat:
 | State Management | Zustand + persist (AsyncStorage) |
 | Backend | Express 5 |
 | Database | SQLite3 |
+| Real-time Communication | Socket.io 4.x |
 | UI Components | React Native core + Ionicons |
 | Gradient | expo-linear-gradient |
 
@@ -263,6 +295,54 @@ Proyek ini dikembangkan sebagai tugas mata kuliah **Pemrograman Mobile** Semeste
 
 ---
 
+## 📝 Changelog
+
+### v1.2.0 (Juni 2026) - Latest
+- ✨ Implementasi sistem notifikasi real-time dengan Socket.io
+- 🎨 Perbaikan konsistensi UI: migrasi simbol Rupiah (Rp) ke Poin
+- 🏆 Penambahan modal interaktif untuk detail lencana dan progress pencapaian
+- ⚙️ Aktivasi modul Pengaturan Akun dengan sinkronisasi API `PUT /users`
+- 📚 Integrasi Pusat Bantuan (FAQ) ke navigasi profil
+- 🐛 Fix: Responsivitas Bottom Navigation Bar dan Input Box
+- 🐛 Fix: Clipping issues pada berbagai ukuran layar perangkat
+
+### v1.1.0
+- 🚀 Implementasi sistem verifikasi token on-site
+- 📊 Penambahan Impact Portfolio dan distribusi kategori sampah
+- 🎮 Sistem gamifikasi: Leaderboard dan Badges
+- 🔐 Mekanisme anti-fraud dengan verifikasi kurir
+
+### v1.0.0
+- 🎉 Rilis awal sistem Eco-Donation Assistant
+- 📱 User App dan Courier App terpisah
+- 🌐 REST API backend dengan SQLite
+- ♻️ Sistem konversi sampah ke poin dasar
+
+---
+
 ## 📄 Lisensi
 
 Proyek ini dibuat untuk keperluan akademik.
+
+---
+
+## 📊 Hasil Analisis Sistem & Rekomendasi (Update Terbaru)
+
+Berdasarkan analisis menyeluruh terhadap arsitektur, basis kode, dan alur kerja sistem Eco-Donation, berikut adalah evaluasi sistem:
+
+### ✅ Kekuatan Sistem Saat Ini
+1. **Arsitektur Terpisah & Terfokus**: Pemisahan `user-app` (untuk pengguna umum) dan `courier-app` (untuk mitra penjemput) adalah praktik yang sangat baik (*Separation of Concerns*). Ini menjaga setiap aplikasi tetap ringan dan sesuai spesifikasinya.
+2. **Keamanan Transaksi (*Anti-Fraud*)**: Metode verifikasi fisik di mana kurir menghasilkan token dan pengguna menginputkannya untuk mendapatkan poin adalah solusi yang tangguh guna mencegah klaim fiktif.
+3. **Penerapan *Real-Time***: Penggunaan `socket.io` di *frontend* memungkinkan pembaruan notifikasi poin secara *real-time* tanpa keharusan pengguna me-*refresh* aplikasi.
+4. **Gamifikasi (*Engagement*)**: Integrasi fitur Papan Peringkat (Leaderboard), *Impact Portfolio*, dan koleksi Lencana (Badges) memberikan insentif psikologis yang bagus agar pengguna terus berpartisipasi dalam daur ulang.
+
+### 🚀 Peningkatan & *Bug Fixes* yang Telah Diterapkan
+- **Sinkronisasi Sistem Poin (UX)**: Mengubah komponen UI pada halaman Kampanye dan Profil yang sebelumnya menggunakan simbol Rupiah (Rp) menjadi Poin, memastikan konsistensi logika ekonomi aplikasi bahwa pengguna menyumbang menggunakan Poin Daur Ulang.
+- **Interaksi *Progress* Pencapaian**: Penambahan antarmuka *Modal* interaktif pada menu Profil, memungkinkan pengguna melihat detail, syarat, dan persentase progres menuju penyelesaian lencana.
+- **Navigasi & Ekstensibilitas Profil**: Mengaktifkan modul Pengaturan Akun dan Pusat Bantuan yang sebelumnya tidak bisa diakses, dan mengintegrasikan sinkronisasi API `PUT /users` dengan *store* Zustand lokal.
+- **Responsivitas Antarmuka**: Memperbaiki isu tampilan terpotong (*clipping*) pada *Bottom Navigation Bar* dan *Input Box* agar sesuai dengan standar antarmuka responsif di berbagai perangkat.
+
+### 💡 Rekomendasi Pengembangan Lanjutan (*Future Work*)
+1. **Peningkatan Keamanan *Backend***: Query autentikasi saat ini terlihat menggunakan logika pemeriksaan *plaintext*. Sangat disarankan untuk segera mengimplementasikan *password hashing* (misal menggunakan *bcrypt*) pada `backend-api` sebelum rilis ke tahap produksi.
+2. **Penanganan *Error* & Layanan *Offline***: Tambahkan kemampuan penyimpanan data sementara (*caching/offline support*) lebih lanjut di aplikasi *mobile* agar data fundamental (seperti Riwayat dan FAQ) tetap dapat diakses meski koneksi internet tidak stabil.
+3. **Validasi Input API**: Terapkan *library* validasi tambahan (seperti `Joi` atau `Zod`) di *middleware* Express.js untuk memastikan setiap data permintaan (*request payload*) tidak menyebabkan anomali pada SQLite.
