@@ -5,7 +5,8 @@ import { useAuthStore } from '../store/useAuthStore';
 // Gunakan localhost untuk Web/Simulator, atau ganti dengan IP Address laptop Anda untuk physical device.
 export const BASE_URL = Platform.OS === 'web' 
   ? 'http://localhost:3000/api'
-  : 'http://10.0.2.2:3000/api'; // 10.0.2.2 is default for Android Emulator. Change to local IP if testing on real device.
+  // : 'http://10.0.2.2:3000/api'; // 10.0.2.2 is default for Android Emulator. Change to local IP if testing on real device.
+  : 'http://192.168.1.3:3000/api'; // 10.0.2.2 is default for Android Emulator. Change to local IP if testing on real device.
 
 const api = axios.create({
   baseURL: BASE_URL,

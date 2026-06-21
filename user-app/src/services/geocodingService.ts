@@ -1,0 +1,105 @@
+// Geocoding Service menggunakan Photon API (Free, No API Key)
+// Photon API: https://photon.komoot.io
+
+export interface GeocodingResult {
+  name: string;
+  address: string;
+  lat: number;
+  lon: number;
+}
+
+export interface AddressProperties {
+  name?: string;
+  street?: string;
+  housenumber?: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  country?: string;
+}
+
+// Format address dari Photon properties
+const formatAddress = (props: AddressProperties): string => {
+  const parts = [];
+  
+  if (props.name) parts.push(props.name);
+  if (props.street) {
+    const street = props.housenumber 
+      ? `${props.street} No. ${props.housenumber}`
+      : props.street;
+    parts.push(street);
+  }
+  if (props.district) parts.push(props.district);
+  if (props.city) parts.push(props.city);
+  if (props.state && props.state !== props.city) parts.push(props.state);
+  
+  return parts.length > 0 ? parts.join(', ') : 'Alamat tidak ditemukan';
+};
+
+// Forward Geocoding: Search address → koordinat
+export const searchAddress = async (
+  query: string,
+  location?: { lat: number; lon: number }
+): Promise<GeocodingResult[]> => {
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      lang: 'id',
+      limit: '5',
+      ...(location && { 
+        lat: location.lat.toString(), 
+        lon: location.lon.toString() 
+      })
+    });
+    
+    const response = await fetch(
+      `https://photon.komoot.io/api?${params}`,
+      { signal: AbortSignal.timeout(5000) } // 5 second timeout
+    );
+    
+    if (!response.ok) {
+      return [];
+    }
+    
+    const data = await response.json();
+    
+    return data.features.map((f: any) => ({
+      name: f.properties.name || f.properties.street || 'Unknown',
+      address: formatAddress(f.properties),
+      lat: f.geometry.coordinates[1],
+      lon: f.geometry.coordinates[0]
+    }));
+  } catch (error) {
+    // Silent fail - return empty array if Photon API unavailable
+    return [];
+  }
+};
+
+// Reverse Geocoding: Koordinat → address
+export const reverseGeocode = async (
+  lat: number,
+  lon: number
+): Promise<string> => {
+  try {
+    const response = await fetch(
+      `https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}&lang=id`,
+      { signal: AbortSignal.timeout(5000) } // 5 second timeout
+    );
+    
+    if (!response.ok) {
+      // Silent fail - just return coordinates
+      return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+    
+    const data = await response.json();
+    
+    if (data.features && data.features.length > 0) {
+      return formatAddress(data.features[0].properties);
+    }
+    
+    return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  } catch (error) {
+    // Silent fail - Photon API might be down, just show coordinates
+    return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  }
+};

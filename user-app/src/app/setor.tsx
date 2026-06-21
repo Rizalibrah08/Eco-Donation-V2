@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
 import ConfirmModal from '../components/ConfirmModal';
 import WarningModal from '../components/WarningModal';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,31 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import api from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
+import { searchAddress, reverseGeocode, GeocodingResult } from '../services/geocodingService';
+import { useDebounce } from '../hooks/useDebounce';
+import * as Location from 'expo-location';
+
+// MapLibre Native (Android/iOS ONLY - tidak akan diload di web)
+let MapLibreGL: any = null;
+let DateTimePicker: any = null;
+
+// Hanya load native modules di platform mobile
+if (Platform.OS === 'android' || Platform.OS === 'ios') {
+  try {
+    MapLibreGL = require('@maplibre/maplibre-react-native').default;
+    if (MapLibreGL?.setAccessToken) {
+      MapLibreGL.setAccessToken(null);
+    }
+  } catch (err) {
+    MapLibreGL = null;
+  }
+  
+  try {
+    DateTimePicker = require('@react-native-community/datetimepicker').default;
+  } catch (err) {
+    DateTimePicker = null;
+  }
+}
 
 // Poin per Kg
 const RATES = {
@@ -24,7 +49,30 @@ export default function SetorScreen() {
     { name: 'Botol Plastik', weight: '' }
   ]);
   const [address, setAddress] = useState('');
-  const [scheduledAt, setScheduledAt] = useState('');
+  
+  // Date and Time state
+  const [date, setDate] = useState(new Date());
+  const [time, setTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  // Map state (defaulting to Jakarta)
+  const [location, setLocation] = useState({
+    latitude: -6.200000,
+    longitude: 106.816666,
+  });
+  
+  // Search autocomplete state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<GeocodingResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [reverseGeocodedAddress, setReverseGeocodedAddress] = useState('');
+  const debouncedQuery = useDebounce(searchQuery, 300);
+  
+  // Map control state
+  const [mapReady, setMapReady] = useState(false);
+  const cameraRef = useRef<any>(null);
+  
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -33,6 +81,81 @@ export default function SetorScreen() {
   const [successMessage, setSuccessMessage] = useState('');
 
   const availableCategories = Object.keys(RATES);
+
+  // Search autocomplete effect
+  useEffect(() => {
+    if (debouncedQuery.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    searchAddress(debouncedQuery, { lat: location.latitude, lon: location.longitude })
+      .then(setSuggestions)
+      .catch(console.error)
+      .finally(() => setIsSearching(false));
+  }, [debouncedQuery]);
+
+  // Reverse geocode on map move (debounced)
+  const debouncedLocation = useDebounce(location, 500);
+  useEffect(() => {
+    reverseGeocode(debouncedLocation.latitude, debouncedLocation.longitude)
+      .then(setReverseGeocodedAddress)
+      .catch(console.error);
+  }, [debouncedLocation]);
+
+  const handleSelectSuggestion = (result: GeocodingResult) => {
+    setLocation({
+      latitude: result.lat,
+      longitude: result.lon,
+    });
+    
+    // Animate camera to new location
+    if (cameraRef.current && Platform.OS !== 'web') {
+      cameraRef.current.setCamera({
+        centerCoordinate: [result.lon, result.lat],
+        zoomLevel: 16,
+        animationDuration: 1000,
+      });
+    }
+    
+    setSearchQuery('');
+    setSuggestions([]);
+  };
+
+  const handleUseCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setWarningMessage('Izin akses lokasi diperlukan untuk fitur ini.');
+        setShowWarning(true);
+        return;
+      }
+      
+      setLoading(true);
+      const currentLocation = await Location.getCurrentPositionAsync({});
+      const newLocation = {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+      };
+      setLocation(newLocation);
+      
+      // Animate camera
+      if (cameraRef.current && Platform.OS !== 'web') {
+        cameraRef.current.setCamera({
+          centerCoordinate: [newLocation.longitude, newLocation.latitude],
+          zoomLevel: 16,
+          animationDuration: 1000,
+        });
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+      setWarningMessage('Gagal mendapatkan lokasi Anda.');
+      setShowWarning(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const addCategory = () => {
     setCategories([...categories, { name: availableCategories[0], weight: '' }]);
@@ -60,13 +183,22 @@ export default function SetorScreen() {
 
   const handleSubmit = () => {
     if (!address.trim()) {
-      setWarningMessage('Silakan isi alamat penjemputan.');
+      setWarningMessage('Silakan isi detail alamat penjemputan.');
       setShowWarning(true);
       return;
     }
 
-    if (!scheduledAt.trim()) {
-      setWarningMessage('Silakan isi jadwal penjemputan.');
+    // Validate operational hours & day
+    const day = date.getDay();
+    if (day === 0) {
+      setWarningMessage('Maaf, penjemputan libur setiap hari Minggu.');
+      setShowWarning(true);
+      return;
+    }
+
+    const hours = time.getHours();
+    if (hours < 7 || hours >= 19) {
+      setWarningMessage('Jam operasional penjemputan adalah pukul 07:00 - 19:00.');
       setShowWarning(true);
       return;
     }
@@ -94,10 +226,17 @@ export default function SetorScreen() {
 
     setLoading(true);
     try {
+      // Format datetime to string
+      const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const formattedTime = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
+      const scheduledAtStr = `${formattedDate} ${formattedTime}`;
+
       await api.post('/pickups', {
         user_id: user?.id,
         pickup_address: address,
-        scheduled_at: scheduledAt,
+        scheduled_at: scheduledAtStr,
+        latitude: location.latitude,
+        longitude: location.longitude,
         items
       });
 
@@ -117,7 +256,13 @@ export default function SetorScreen() {
       style={styles.container}
     >
       <LinearGradient colors={['#004d40', '#00bfa5']} style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(tabs)');
+          }
+        }}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Setor Sampah</Text>
@@ -179,8 +324,132 @@ export default function SetorScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>Informasi Penjemputan</Text>
+        
+        {/* Search Address Autocomplete */}
+        <View style={[styles.inputGroup, { marginBottom: 15, zIndex: 1000 }]}>
+          <Text style={styles.label}>Cari Lokasi Penjemputan</Text>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Cari alamat (min 3 karakter)..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {isSearching && <ActivityIndicator size="small" color="#00bfa5" />}
+          </View>
+          
+          {/* Dropdown suggestions */}
+          {suggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              <FlatList
+                data={suggestions}
+                keyExtractor={(item, index) => `${item.lat}-${item.lon}-${index}`}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.suggestionItem}
+                    onPress={() => handleSelectSuggestion(item)}
+                  >
+                    <Ionicons name="location-outline" size={20} color="#666" />
+                    <View style={styles.suggestionText}>
+                      <Text style={styles.suggestionName}>{item.name}</Text>
+                      <Text style={styles.suggestionAddress}>{item.address}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                scrollEnabled={false}
+                nestedScrollEnabled={true}
+              />
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.inputGroup, { marginBottom: 15 }]}>
+          <View style={styles.mapHeader}>
+            <Text style={styles.label}>Tentukan Lokasi Peta Akurat</Text>
+            <TouchableOpacity 
+              style={styles.currentLocationBtn}
+              onPress={handleUseCurrentLocation}
+            >
+              <Ionicons name="navigate" size={16} color="#00bfa5" />
+              <Text style={styles.currentLocationText}>Lokasi Saya</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.mapContainer}>
+            {Platform.OS === 'web' ? (
+              <iframe
+                width="100%"
+                height="300"
+                style={{ border: 0, borderRadius: 8 }}
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.longitude-0.01},${location.latitude-0.01},${location.longitude+0.01},${location.latitude+0.01}&marker=${location.latitude},${location.longitude}`}
+              />
+            ) : MapLibreGL ? (
+              <>
+                <MapLibreGL.MapView
+                  style={styles.map}
+                  styleURL="https://tiles.openfreemap.org/styles/liberty"
+                  onDidFinishLoadingMap={() => setMapReady(true)}
+                  onDidFailLoadingMap={(error: any) => {
+                    console.error('Map loading error:', error);
+                    setWarningMessage('Koneksi internet diperlukan untuk maps');
+                    setShowWarning(true);
+                  }}
+                  onRegionDidChange={async (feature: any) => {
+                    if (feature && feature.geometry && feature.geometry.coordinates) {
+                      const [lon, lat] = feature.geometry.coordinates;
+                      setLocation({ latitude: lat, longitude: lon });
+                    }
+                  }}
+                >
+                  <MapLibreGL.Camera
+                    ref={cameraRef}
+                    zoomLevel={15}
+                    centerCoordinate={[location.longitude, location.latitude]}
+                  />
+                </MapLibreGL.MapView>
+                
+                {/* Center Marker Overlay */}
+                <View style={styles.mapOverlay} pointerEvents="none">
+                  <Ionicons name="location" size={40} color="#ff5252" />
+                </View>
+                
+                {/* Loading indicator */}
+                {!mapReady && (
+                  <View style={styles.mapLoading}>
+                    <ActivityIndicator size="large" color="#00bfa5" />
+                    <Text style={styles.mapLoadingText}>Memuat peta...</Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={[styles.map, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffebee' }]}>
+                <Ionicons name="alert-circle-outline" size={40} color="#c62828" />
+                <Text style={{ color: '#c62828', textAlign: 'center', marginTop: 10 }}>
+                  MapLibre tidak tersedia.
+                </Text>
+              </View>
+            )}
+          </View>
+          
+          {/* Location info display */}
+          <View style={styles.locationInfo}>
+            <Ionicons name="location-outline" size={16} color="#666" />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={styles.locationAddress}>
+                {reverseGeocodedAddress || 'Memuat alamat...'}
+              </Text>
+              <Text style={styles.locationCoords}>
+                {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+              </Text>
+            </View>
+          </View>
+          
+          <Text style={styles.mapHint}>💡 Geser peta untuk menyesuaikan titik penjemputan</Text>
+        </View>
+
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Alamat Lengkap</Text>
+          <Text style={styles.label}>Detail Alamat Lengkap</Text>
           <TextInput
             style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
             multiline
@@ -191,13 +460,52 @@ export default function SetorScreen() {
         </View>
 
         <View style={[styles.inputGroup, { marginTop: 15 }]}>
-          <Text style={styles.label}>Jadwal Penjemputan</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Contoh: Hari ini 14:00"
-            value={scheduledAt}
-            onChangeText={setScheduledAt}
-          />
+          <Text style={styles.label}>Jadwal Penjemputan (07:00 - 19:00, Senin-Sabtu)</Text>
+          <View style={styles.datetimeRow}>
+            <TouchableOpacity style={[styles.datetimeButton, { marginRight: 10 }]} onPress={() => setShowDatePicker(true)}>
+              <Ionicons name="calendar-outline" size={20} color="#666" />
+              <Text style={styles.datetimeText}>
+                {date.toLocaleDateString('id-ID')}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.datetimeButton} onPress={() => setShowTimePicker(true)}>
+              <Ionicons name="time-outline" size={20} color="#666" />
+              <Text style={styles.datetimeText}>
+                {String(time.getHours()).padStart(2, '0')}:{String(time.getMinutes()).padStart(2, '0')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {showDatePicker && Platform.OS !== 'web' && DateTimePicker && (
+            <DateTimePicker
+              value={date}
+              mode="date"
+              display="default"
+              onChange={(event: any, selectedDate: any) => {
+                setShowDatePicker(false);
+                if (selectedDate) setDate(selectedDate);
+              }}
+            />
+          )}
+
+          {showTimePicker && Platform.OS !== 'web' && DateTimePicker && (
+            <DateTimePicker
+              value={time}
+              mode="time"
+              display="default"
+              onChange={(event: any, selectedTime: any) => {
+                setShowTimePicker(false);
+                if (selectedTime) setTime(selectedTime);
+              }}
+            />
+          )}
+
+          {Platform.OS === 'web' && (showDatePicker || showTimePicker) && (
+            <Text style={{ color: '#ff5252', marginTop: 10, fontSize: 12 }}>
+              Pemilih tanggal & waktu native hanya tersedia di Mobile. Gunakan aplikasi untuk mengatur jadwal.
+            </Text>
+          )}
         </View>
 
         <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={loading}>
@@ -395,6 +703,167 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  mapContainer: {
+    height: 220,
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#e0e0e0',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  map: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  mapOverlay: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -20,
+    marginTop: -40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  mapLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  mapLoadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#666',
+  },
+  mapHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  currentLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#e8f5e9',
+  },
+  currentLocationText: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: '#00bfa5',
+    fontWeight: '600',
+  },
+  locationInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  locationAddress: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  locationCoords: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
+  },
+  mapHint: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 8,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  suggestionsContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    marginTop: 5,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    maxHeight: 250,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  suggestionText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  suggestionName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  suggestionAddress: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  datetimeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  datetimeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingVertical: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  datetimeText: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,

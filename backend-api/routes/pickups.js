@@ -7,12 +7,17 @@ const RATES = { 'Botol Plastik': 800, 'Kertas': 600, 'Kaleng': 1000, 'Botol Kaca
 
 // Create pickup order
 router.post('/', (req, res) => {
-  const { user_id, items, pickup_address, scheduled_at } = req.body;
+  const { user_id, items, pickup_address, scheduled_at, latitude, longitude } = req.body;
   if (!user_id || !items?.length) return res.status(400).json({ error: 'user_id and items required' });
 
+  let pickup_location = null;
+  if (latitude !== undefined && longitude !== undefined) {
+    pickup_location = JSON.stringify({ lat: latitude, lng: longitude });
+  }
+
   const db = req.app.locals.db;
-  db.run('INSERT INTO pickup_orders (user_id, pickup_address, scheduled_at) VALUES (?, ?, ?)',
-    [user_id, pickup_address, scheduled_at],
+  db.run('INSERT INTO pickup_orders (user_id, pickup_address, scheduled_at, pickup_location) VALUES (?, ?, ?, ?)',
+    [user_id, pickup_address, scheduled_at, pickup_location],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       const orderId = this.lastID;

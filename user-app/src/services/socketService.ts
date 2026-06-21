@@ -3,7 +3,8 @@ import { Platform } from 'react-native';
 
 const SERVER_URL = Platform.OS === 'web'
   ? 'http://localhost:3000'
-  : 'http://10.0.2.2:3000'; // Android Emulator
+  // : 'http://10.0.2.2:3000'; // Android Emulator
+  : 'http://192.168.1.7:3000'; // Physical device IP
 
 let socket: any = null;
 
