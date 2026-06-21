@@ -29,6 +29,7 @@ Eco-Donation Assistant terdiri dari **3 komponen** yang saling terintegrasi:
 
 ### 👤 User App
 - **Sistem Poin Daur Ulang**: Konversi sampah menjadi poin dengan rate transparan per kategori
+- **Maps & Geocoding**: Pencarian lokasi dengan autocomplete + peta interaktif (MapLibre + OpenFreeMap)
 - **Verifikasi On-Site**: Token-based verification untuk mencegah fraud
 - **Katalog Kampanye**: Jelajahi dan donasikan poin ke berbagai kampanye sosial
 - **Real-time Notifications**: Update status penjemputan dan poin masuk secara langsung
@@ -146,6 +147,36 @@ const BASE_URL = Platform.OS === 'web'
 ```
 
 Cek IP laptop: `ipconfig` (Windows) atau `ifconfig` (Mac/Linux).
+
+---
+
+## 🗺️ Maps & Geocoding
+
+Sistem peta dan geocoding Eco-Donation menggunakan teknologi **100% gratis** tanpa API key:
+
+### **Komponen:**
+- **MapLibre Native**: Open-source renderer untuk vector tiles
+- **OpenFreeMap**: Free tile server dengan unlimited usage
+- **Photon API**: Free geocoding & autocomplete dari Komoot
+
+### **Setup:**
+Tidak ada konfigurasi tambahan! Maps dan search address bekerja **out-of-the-box**.
+
+### **Fitur:**
+✅ Search autocomplete lokasi (min 3 karakter)
+✅ Reverse geocoding untuk display alamat real-time
+✅ Button "Gunakan Lokasi Saya" dengan GPS
+✅ Draggable map dengan center marker precision
+✅ Loading states & offline error handling
+
+### **Fair Use Policy:**
+- Photon API: Max 1 request/second (auto-handled dengan debounce 300ms)
+- OpenFreeMap: Unlimited, dioptimalkan untuk mobile usage
+
+### **Troubleshooting:**
+- **Layar hitam?** Pastikan koneksi internet aktif, MapLibre butuh download tiles
+- **Search tidak muncul?** Ketik minimal 3 karakter untuk trigger autocomplete
+- **Koordinat tidak akurat?** Drag map dan tunggu hingga marker center stabil
 
 ---
 
@@ -281,6 +312,9 @@ Verifikasi dilakukan secara **on-site** untuk mencegah kecurangan berat:
 | Mobile Framework | Expo SDK 54 / React Native 0.81 |
 | Routing | expo-router (file-based) |
 | State Management | Zustand + persist (AsyncStorage) |
+| Maps & Tiles | MapLibre Native + OpenFreeMap (free, no API key) |
+| Geocoding | Photon API by Komoot (free, no API key) |
+| Location Services | expo-location |
 | Backend | Express 5 |
 | Database | SQLite3 |
 | Real-time Communication | Socket.io 4.x |
@@ -297,7 +331,19 @@ Proyek ini dikembangkan sebagai tugas mata kuliah **Pemrograman Mobile** Semeste
 
 ## 📝 Changelog
 
-### v1.2.0 (Juni 2026) - Latest
+### v1.3.0 (Juni 2026) - Latest
+- 🗺️ **Major: Implementasi Maps Module dengan MapLibre Native**
+  - Fix layar hitam Android dengan migrasi dari react-native-maps ke MapLibre
+  - Integrasi OpenFreeMap (free vector tiles, no API key required)
+  - Tambah fitur search autocomplete lokasi dengan Photon Geocoding API
+  - Tambah reverse geocoding untuk display alamat real-time
+  - Tambah button "Gunakan Lokasi Saya" dengan expo-location
+  - Draggable map dengan center marker untuk precision lokasi
+  - Loading states dan error handling untuk koneksi internet
+- 🎯 UX Improvement: Koordinat dan alamat ditampilkan real-time saat drag map
+- 🚀 Performance: Vector tiles lebih smooth daripada raster tiles
+
+### v1.2.0 (Juni 2026)
 - ✨ Implementasi sistem notifikasi real-time dengan Socket.io
 - 🎨 Perbaikan konsistensi UI: migrasi simbol Rupiah (Rp) ke Poin
 - 🏆 Penambahan modal interaktif untuk detail lencana dan progress pencapaian

@@ -14,7 +14,16 @@
       "adaptiveIcon": {
         "backgroundColor": "#004d40",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
-      }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.userapp"
     },
     "web": {
       "output": "static",
@@ -22,6 +31,13 @@
     },
     "plugins": [
       "expo-router",
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Izinkan Eco-Donation mengakses lokasi Anda untuk menentukan titik penjemputan sampah."
+        }
+      ],
       [
         "expo-splash-screen",
         {
