@@ -41,9 +41,14 @@ export const searchAddress = async (
   query: string,
   location?: { lat: number; lon: number }
 ): Promise<GeocodingResult[]> => {
+  // Minimal validation: query must be at least 3 characters
+  if (!query || query.trim().length < 3) {
+    return [];
+  }
+
   try {
     const params = new URLSearchParams({
-      q: query,
+      q: query.trim(),
       lang: 'id',
       limit: '5',
       ...(location && { 
@@ -54,14 +59,18 @@ export const searchAddress = async (
     
     const response = await fetch(
       `https://photon.komoot.io/api?${params}`,
-      { signal: AbortSignal.timeout(5000) } // 5 second timeout
-    );
+      { signal: AbortSignal.timeout(5000) }
+    ).catch(() => null);
     
-    if (!response.ok) {
+    if (!response || !response.ok) {
       return [];
     }
     
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
+    
+    if (!data?.features) {
+      return [];
+    }
     
     return data.features.map((f: any) => ({
       name: f.properties.name || f.properties.street || 'Unknown',
@@ -69,8 +78,7 @@ export const searchAddress = async (
       lat: f.geometry.coordinates[1],
       lon: f.geometry.coordinates[0]
     }));
-  } catch (error) {
-    // Silent fail - return empty array if Photon API unavailable
+  } catch {
     return [];
   }
 };
@@ -80,26 +88,27 @@ export const reverseGeocode = async (
   lat: number,
   lon: number
 ): Promise<string> => {
+  // Validasi koordinat
+  if (!lat || !lon || isNaN(lat) || isNaN(lon)) {
+    return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  }
+  
   try {
     const response = await fetch(
       `https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}&lang=id`,
-      { signal: AbortSignal.timeout(5000) } // 5 second timeout
-    );
+      { signal: AbortSignal.timeout(5000) }
+    ).catch(() => null);
     
-    if (!response.ok) {
-      // Silent fail - just return coordinates
+    if (!response || !response.ok) {
       return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
     }
     
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
     
-    if (data.features && data.features.length > 0) {
+    if (data?.features?.[0]) {
       return formatAddress(data.features[0].properties);
     }
-    
-    return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
-  } catch (error) {
-    // Silent fail - Photon API might be down, just show coordinates
-    return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
-  }
+  } catch {}
+  
+  return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 };

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
+import { WebView } from 'react-native-webview';
 import ConfirmModal from '../components/ConfirmModal';
 import WarningModal from '../components/WarningModal';
 import { useRouter } from 'expo-router';
@@ -11,21 +12,10 @@ import { searchAddress, reverseGeocode, GeocodingResult } from '../services/geoc
 import { useDebounce } from '../hooks/useDebounce';
 import * as Location from 'expo-location';
 
-// MapLibre Native (Android/iOS ONLY - tidak akan diload di web)
-let MapLibreGL: any = null;
+// Native modules
 let DateTimePicker: any = null;
 
-// Hanya load native modules di platform mobile
 if (Platform.OS === 'android' || Platform.OS === 'ios') {
-  try {
-    MapLibreGL = require('@maplibre/maplibre-react-native').default;
-    if (MapLibreGL?.setAccessToken) {
-      MapLibreGL.setAccessToken(null);
-    }
-  } catch (err) {
-    MapLibreGL = null;
-  }
-  
   try {
     DateTimePicker = require('@react-native-community/datetimepicker').default;
   } catch (err) {
@@ -49,7 +39,7 @@ export default function SetorScreen() {
     { name: 'Botol Plastik', weight: '' }
   ]);
   const [address, setAddress] = useState('');
-  
+
   // Date and Time state
   const [date, setDate] = useState(new Date());
   const [time, setTime] = useState(new Date());
@@ -61,18 +51,87 @@ export default function SetorScreen() {
     latitude: -6.200000,
     longitude: 106.816666,
   });
-  
+  const [hasInteracted, setHasInteracted] = useState(false);
+
   // Search autocomplete state
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<GeocodingResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [reverseGeocodedAddress, setReverseGeocodedAddress] = useState('');
   const debouncedQuery = useDebounce(searchQuery, 300);
-  
+
   // Map control state
   const [mapReady, setMapReady] = useState(false);
-  const cameraRef = useRef<any>(null);
-  
+  const webViewRef = useRef<any>(null);
+
+  // Generate HTML untuk Leaflet Map
+  const generateMapHTML = () => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        body { margin: 0; padding: 0; }
+        #map { height: 100vh; width: 100%; }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map').setView([${location.latitude}, ${location.longitude}], 15);
+        
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        var marker = L.marker([${location.latitude}, ${location.longitude}], { draggable: true }).addTo(map);
+
+        marker.on('dragend', function(e) {
+          var pos = marker.getLatLng();
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'marker-moved',
+            latitude: pos.lat,
+            longitude: pos.lng
+          }));
+        });
+
+        map.on('click', function(e) {
+          marker.setLatLng(e.latlng);
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'marker-moved',
+            latitude: e.latlng.lat,
+            longitude: e.latlng.lng
+          }));
+        });
+
+        // Listen for location updates from React Native
+        window.updateLocation = function(lat, lng) {
+          marker.setLatLng([lat, lng]);
+          map.setView([lat, lng], 15);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
+  // Handle WebView messages
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'marker-moved') {
+        setHasInteracted(true);
+        setLocation({
+          latitude: data.latitude,
+          longitude: data.longitude,
+        });
+      }
+    } catch (err) {
+      console.error('WebView message error:', err);
+    }
+  };
+
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -88,7 +147,7 @@ export default function SetorScreen() {
       setSuggestions([]);
       return;
     }
-    
+
     setIsSearching(true);
     searchAddress(debouncedQuery, { lat: location.latitude, lon: location.longitude })
       .then(setSuggestions)
@@ -99,26 +158,26 @@ export default function SetorScreen() {
   // Reverse geocode on map move (debounced)
   const debouncedLocation = useDebounce(location, 500);
   useEffect(() => {
+    if (!hasInteracted) return;
     reverseGeocode(debouncedLocation.latitude, debouncedLocation.longitude)
-      .then(setReverseGeocodedAddress)
-      .catch(console.error);
-  }, [debouncedLocation]);
+      .then(setReverseGeocodedAddress);
+  }, [debouncedLocation, hasInteracted]);
 
   const handleSelectSuggestion = (result: GeocodingResult) => {
+    setHasInteracted(true);
     setLocation({
       latitude: result.lat,
       longitude: result.lon,
     });
-    
-    // Animate camera to new location
-    if (cameraRef.current && Platform.OS !== 'web') {
-      cameraRef.current.setCamera({
-        centerCoordinate: [result.lon, result.lat],
-        zoomLevel: 16,
-        animationDuration: 1000,
-      });
+
+    // Update WebView map
+    if (webViewRef.current) {
+      webViewRef.current.injectJavaScript(`
+        updateLocation(${result.lat}, ${result.lon});
+        true;
+      `);
     }
-    
+
     setSearchQuery('');
     setSuggestions([]);
   };
@@ -131,7 +190,7 @@ export default function SetorScreen() {
         setShowWarning(true);
         return;
       }
-      
+
       setLoading(true);
       const currentLocation = await Location.getCurrentPositionAsync({});
       const newLocation = {
@@ -139,14 +198,13 @@ export default function SetorScreen() {
         longitude: currentLocation.coords.longitude,
       };
       setLocation(newLocation);
-      
-      // Animate camera
-      if (cameraRef.current && Platform.OS !== 'web') {
-        cameraRef.current.setCamera({
-          centerCoordinate: [newLocation.longitude, newLocation.latitude],
-          zoomLevel: 16,
-          animationDuration: 1000,
-        });
+
+      // Update WebView map
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(`
+          updateLocation(${newLocation.latitude}, ${newLocation.longitude});
+          true;
+        `);
       }
     } catch (error) {
       console.error('Error getting location:', error);
@@ -324,7 +382,7 @@ export default function SetorScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>Informasi Penjemputan</Text>
-        
+
         {/* Search Address Autocomplete */}
         <View style={[styles.inputGroup, { marginBottom: 15, zIndex: 1000 }]}>
           <Text style={styles.label}>Cari Lokasi Penjemputan</Text>
@@ -338,7 +396,7 @@ export default function SetorScreen() {
             />
             {isSearching && <ActivityIndicator size="small" color="#00bfa5" />}
           </View>
-          
+
           {/* Dropdown suggestions */}
           {suggestions.length > 0 && (
             <View style={styles.suggestionsContainer}>
@@ -367,7 +425,7 @@ export default function SetorScreen() {
         <View style={[styles.inputGroup, { marginBottom: 15 }]}>
           <View style={styles.mapHeader}>
             <Text style={styles.label}>Tentukan Lokasi Peta Akurat</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.currentLocationBtn}
               onPress={handleUseCurrentLocation}
             >
@@ -375,63 +433,26 @@ export default function SetorScreen() {
               <Text style={styles.currentLocationText}>Lokasi Saya</Text>
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.mapContainer}>
-            {Platform.OS === 'web' ? (
-              <iframe
-                width="100%"
-                height="300"
-                style={{ border: 0, borderRadius: 8 }}
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.longitude-0.01},${location.latitude-0.01},${location.longitude+0.01},${location.latitude+0.01}&marker=${location.latitude},${location.longitude}`}
-              />
-            ) : MapLibreGL ? (
-              <>
-                <MapLibreGL.MapView
-                  style={styles.map}
-                  styleURL="https://tiles.openfreemap.org/styles/liberty"
-                  onDidFinishLoadingMap={() => setMapReady(true)}
-                  onDidFailLoadingMap={(error: any) => {
-                    console.error('Map loading error:', error);
-                    setWarningMessage('Koneksi internet diperlukan untuk maps');
-                    setShowWarning(true);
-                  }}
-                  onRegionDidChange={async (feature: any) => {
-                    if (feature && feature.geometry && feature.geometry.coordinates) {
-                      const [lon, lat] = feature.geometry.coordinates;
-                      setLocation({ latitude: lat, longitude: lon });
-                    }
-                  }}
-                >
-                  <MapLibreGL.Camera
-                    ref={cameraRef}
-                    zoomLevel={15}
-                    centerCoordinate={[location.longitude, location.latitude]}
-                  />
-                </MapLibreGL.MapView>
-                
-                {/* Center Marker Overlay */}
-                <View style={styles.mapOverlay} pointerEvents="none">
-                  <Ionicons name="location" size={40} color="#ff5252" />
-                </View>
-                
-                {/* Loading indicator */}
-                {!mapReady && (
-                  <View style={styles.mapLoading}>
-                    <ActivityIndicator size="large" color="#00bfa5" />
-                    <Text style={styles.mapLoadingText}>Memuat peta...</Text>
-                  </View>
-                )}
-              </>
-            ) : (
-              <View style={[styles.map, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffebee' }]}>
-                <Ionicons name="alert-circle-outline" size={40} color="#c62828" />
-                <Text style={{ color: '#c62828', textAlign: 'center', marginTop: 10 }}>
-                  MapLibre tidak tersedia.
-                </Text>
+            <WebView
+              ref={webViewRef}
+              source={{ html: generateMapHTML() }}
+              style={styles.map}
+              onMessage={handleWebViewMessage}
+              onLoadEnd={() => setMapReady(true)}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+            />
+            
+            {!mapReady && (
+              <View style={styles.mapLoading}>
+                <ActivityIndicator size="large" color="#00bfa5" />
+                <Text style={styles.mapLoadingText}>Memuat peta...</Text>
               </View>
             )}
           </View>
-          
+
           {/* Location info display */}
           <View style={styles.locationInfo}>
             <Ionicons name="location-outline" size={16} color="#666" />
@@ -444,8 +465,8 @@ export default function SetorScreen() {
               </Text>
             </View>
           </View>
-          
-          <Text style={styles.mapHint}>💡 Geser peta untuk menyesuaikan titik penjemputan</Text>
+
+          <Text style={styles.mapHint}>💡 Klik/tap pada peta atau drag marker untuk mengatur lokasi</Text>
         </View>
 
         <View style={styles.inputGroup}>
@@ -720,16 +741,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-  },
-  mapOverlay: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginLeft: -20,
-    marginTop: -40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 100,
   },
   mapLoading: {
     position: 'absolute',
