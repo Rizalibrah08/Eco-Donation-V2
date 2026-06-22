@@ -1,10 +1,10 @@
 import io from 'socket.io-client';
 import { Platform } from 'react-native';
 
+// PENTING: Pastikan IP ini SAMA dengan yang di api.ts
 const SERVER_URL = Platform.OS === 'web'
   ? 'http://localhost:3000'
-  // : 'http://10.0.2.2:3000'; // Android Emulator
-  : 'http://192.168.1.7:3000'; // Physical device IP
+  : 'http://192.168.1.3:3000'; // IP laptop kamu (harus sama dengan api.ts)
 
 let socket: any = null;
 
@@ -12,11 +12,14 @@ export const initSocketConnection = (userId: number, onNotification: (notificati
   if (socket?.connected) return socket;
 
   socket = io(SERVER_URL, {
+    path: '/socket.io/',
+    transports: ['polling', 'websocket'], // Coba polling dulu baru websocket
     reconnection: true,
     reconnectionDelay: 3000,
     reconnectionDelayMax: 10000,
-    reconnectionAttempts: 3,
-    timeout: 5000,
+    reconnectionAttempts: 5,
+    timeout: 20000, // Timeout lebih lama untuk koneksi mobile
+    forceNew: true,
   });
 
   socket.on('connect', () => {
@@ -24,7 +27,7 @@ export const initSocketConnection = (userId: number, onNotification: (notificati
     socket.emit('register_user', userId);
   });
 
-  socket.on('notification', (notification) => {
+  socket.on('notification', (notification: any) => {
     console.log('Notification received:', notification);
     onNotification(notification);
   });
@@ -33,7 +36,7 @@ export const initSocketConnection = (userId: number, onNotification: (notificati
     console.log('Socket disconnected');
   });
 
-  socket.on('connect_error', (error) => {
+  socket.on('connect_error', (error: Error) => {
     console.error('Socket connection error:', error);
   });
 
