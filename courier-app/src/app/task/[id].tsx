@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Linking } from 'react-native';
 import ConfirmModal from '../../components/ConfirmModal';
 import SuccessModal from '../../components/SuccessModal';
 import WarningModal from '../../components/WarningModal';
 import ErrorModal from '../../components/ErrorModal';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Camera, CameraView } from 'expo-camera';
+import { WebView } from 'react-native-webview';
 
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -43,6 +45,13 @@ export default function TaskDetailScreen() {
   const fetchTaskDetail = async () => {
     try {
       const response = await api.get(`/pickups/${id}`);
+      console.log('📍 Task Detail Response:', {
+        id: response.data.id,
+        address: response.data.pickup_address,
+        latitude: response.data.latitude,
+        longitude: response.data.longitude,
+        status: response.data.status
+      });
       setTask(response.data);
 
       if (response.data.status === 'pending_verification') {
@@ -50,6 +59,7 @@ export default function TaskDetailScreen() {
         setQrToken('pending');
       }
     } catch (error) {
+      console.error('❌ Error fetching task:', error);
       setErrorMessage('Gagal memuat tugas.');
       setShowError(true);
       if (router.canGoBack()) {
@@ -60,6 +70,36 @@ export default function TaskDetailScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openMaps = () => {
+    // Gunakan koordinat saja
+    if (!task?.latitude || !task?.longitude) {
+      setWarningMessage('Koordinat lokasi tidak tersedia');
+      setShowWarning(true);
+      return;
+    }
+
+    const coords = `${task.latitude},${task.longitude}`;
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${coords}`;
+    
+    // Untuk native app, gunakan koordinat
+    const mapsUrl = Platform.select({
+      ios: `maps://?q=${coords}`,
+      android: `geo:${task.latitude},${task.longitude}?q=${coords}`,
+      default: googleMapsUrl,
+    }) as string;
+
+    Linking.canOpenURL(mapsUrl).then(supported => {
+      if (supported) {
+        Linking.openURL(mapsUrl);
+      } else {
+        // Fallback to web browser
+        Linking.openURL(googleMapsUrl);
+      }
+    }).catch(() => {
+      Linking.openURL(googleMapsUrl);
+    });
   };
 
   const handleAcceptTask = () => {
@@ -191,8 +231,16 @@ export default function TaskDetailScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
-      <View style={styles.header}>
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      {/* Header with Gradient */}
+      <LinearGradient
+        colors={['#1565c0', '#0d47a1']}
+        style={styles.header}
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => {
           if (router.canGoBack()) {
             router.back();
@@ -200,63 +248,179 @@ export default function TaskDetailScreen() {
             router.replace('/(tabs)');
           }
         }}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Detail Tugas #{task.id}</Text>
         <View style={{ width: 24 }} />
-      </View>
+      </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {qrToken ? (
           <View style={styles.qrContainer}>
-            <Text style={styles.qrTitle}>Verifikasi dari Pengguna</Text>
-            <Ionicons name="qr-code-outline" size={80} color="#1565c0" style={{ marginBottom: 20 }} />
-            <Text style={styles.qrInstruction}>
-              Pengguna telah menerima rincian berat di aplikasinya. Silakan Scan QR Code dari layar Pengguna, atau masukkan Token secara manual.
-            </Text>
-
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#1565c0', width: '100%', marginTop: 20 }]}
-              onPress={openScanner}
+            <LinearGradient
+              colors={['#4fc3f7', '#2196f3']}
+              style={styles.qrGradient}
             >
-              <Text style={styles.actionButtonText}>Scan QR Code</Text>
-            </TouchableOpacity>
+              <Ionicons name="shield-checkmark" size={80} color="#fff" style={{ marginBottom: 20 }} />
+              <Text style={styles.qrTitle}>Verifikasi dari Pengguna</Text>
+              <Text style={styles.qrInstruction}>
+                Pengguna telah menerima rincian berat di aplikasinya. Silakan Scan QR Code dari layar Pengguna, atau masukkan Token secara manual.
+              </Text>
 
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#e65100', width: '100%', marginTop: 15 }]}
-              onPress={() => setShowTokenInput(true)}
-            >
-              <Text style={styles.actionButtonText}>Masukkan Token</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.qrActionButton}
+                onPress={openScanner}
+              >
+                <Ionicons name="scan" size={24} color="#1565c0" />
+                <Text style={styles.qrActionText}>Scan QR Code</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.qrActionButton, { backgroundColor: 'rgba(255,255,255,0.3)' }]}
+                onPress={() => setShowTokenInput(true)}
+              >
+                <Ionicons name="keypad" size={24} color="#fff" />
+                <Text style={[styles.qrActionText, { color: '#fff' }]}>Masukkan Token</Text>
+              </TouchableOpacity>
+            </LinearGradient>
           </View>
         ) : (
           <>
+            {/* User Info Card with Map Button */}
             <View style={styles.infoCard}>
-              <Text style={styles.sectionTitle}>Informasi Penjemputan</Text>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionIconContainer}>
+                  <Ionicons name="information-circle" size={24} color="#1565c0" />
+                </View>
+                <Text style={styles.sectionTitle}>Informasi Penjemputan</Text>
+              </View>
 
               <View style={styles.infoRow}>
-                <Ionicons name="person" size={20} color="#1565c0" style={styles.infoIcon} />
-                <View>
+                <View style={styles.infoIconContainer}>
+                  <Ionicons name="person" size={20} color="#4fc3f7" />
+                </View>
+                <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Pengguna</Text>
                   <Text style={styles.infoValue}>{task.user_name}</Text>
                 </View>
               </View>
 
               <View style={styles.infoRow}>
-                <Ionicons name="location" size={20} color="#1565c0" style={styles.infoIcon} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.infoLabel}>Alamat</Text>
+                <View style={styles.infoIconContainer}>
+                  <Ionicons name="location" size={20} color="#ff6b6b" />
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Alamat Penjemputan</Text>
                   <Text style={styles.infoValue}>{task.pickup_address}</Text>
                 </View>
               </View>
 
+              {/* Embedded Map */}
+              {task.latitude && task.longitude ? (
+                <View style={styles.embeddedMapContainer}>
+                  <WebView
+                    source={{
+                      html: `
+                        <!DOCTYPE html>
+                        <html>
+                          <head>
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+                                  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+                                  crossorigin=""/>
+                            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+                                    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+                                    crossorigin=""></script>
+                            <style>
+                              * { margin: 0; padding: 0; }
+                              html, body { height: 100%; width: 100%; }
+                              #map { height: 100%; width: 100%; }
+                            </style>
+                          </head>
+                          <body>
+                            <div id="map"></div>
+                            <script>
+                              try {
+                                var map = L.map('map', {
+                                  zoomControl: false,
+                                  attributionControl: false
+                                }).setView([${task.latitude}, ${task.longitude}], 15);
+                                
+                                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                                  maxZoom: 19,
+                                  attribution: ''
+                                }).addTo(map);
+                                
+                                var marker = L.marker([${task.latitude}, ${task.longitude}]).addTo(map);
+                                marker.bindPopup('Lokasi Penjemputan').openPopup();
+                                
+                                var circle = L.circle([${task.latitude}, ${task.longitude}], {
+                                  color: '#2196f3',
+                                  fillColor: '#4fc3f7',
+                                  fillOpacity: 0.2,
+                                  radius: 50
+                                }).addTo(map);
+                                
+                                setTimeout(function() {
+                                  map.invalidateSize();
+                                }, 200);
+                              } catch(e) {
+                                document.body.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Peta tidak dapat dimuat</div>';
+                              }
+                            </script>
+                          </body>
+                        </html>
+                      `
+                    }}
+                    style={styles.embeddedMap}
+                    javaScriptEnabled={true}
+                    domStorageEnabled={true}
+                    scrollEnabled={false}
+                    bounces={false}
+                    scalesPageToFit={true}
+                    originWhitelist={['*']}
+                    mixedContentMode="compatibility"
+                    androidLayerType="hardware"
+                    onError={(syntheticEvent) => {
+                      const { nativeEvent } = syntheticEvent;
+                      console.warn('WebView error: ', nativeEvent);
+                    }}
+                  />
+                </View>
+              ) : (
+                <View style={styles.mapPlaceholder}>
+                  <Ionicons name="map-outline" size={40} color="#ccc" />
+                  <Text style={styles.mapPlaceholderText}>Koordinat tidak tersedia</Text>
+                </View>
+              )}
+
+              {/* Google Maps Button */}
+              <View style={styles.mapsButtonContainer}>
+                <TouchableOpacity 
+                  style={styles.fullWidthMapButton}
+                  onPress={openMaps}
+                >
+                  <LinearGradient
+                    colors={['#66bb6a', '#43a047']}
+                    style={styles.mapsGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <Ionicons name="map" size={20} color="#fff" />
+                    <Text style={styles.mapsButtonText}>Lihat Peta</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+
               <View style={styles.infoRow}>
-                <Ionicons name="information-circle" size={20} color="#1565c0" style={styles.infoIcon} />
-                <View>
+                <View style={styles.infoIconContainer}>
+                  <Ionicons name="analytics" size={20} color="#ffd93d" />
+                </View>
+                <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Status</Text>
                   <Text style={[styles.infoValue, {
-                    color: task.status === 'on_the_way' ? '#e65100' :
-                      task.status === 'pending_verification' ? '#ffb300' : '#1565c0'
+                    color: task.status === 'on_the_way' ? '#ff6b6b' :
+                      task.status === 'pending_verification' ? '#ffd93d' : '#4fc3f7'
                   }]}>
                     {task.status === 'waiting' ? 'Menunggu Penjemputan' :
                       task.status === 'pending_verification' ? 'Menunggu Verifikasi QR' : 'Kurir Menuju Lokasi'}
@@ -265,11 +429,29 @@ export default function TaskDetailScreen() {
               </View>
             </View>
 
+            {/* Items Card */}
             <View style={styles.itemsCard}>
-              <Text style={styles.sectionTitle}>Daftar Barang & Timbangan</Text>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionIconContainer}>
+                  <Ionicons name="cube" size={24} color="#1565c0" />
+                </View>
+                <Text style={styles.sectionTitle}>Daftar Barang & Timbangan</Text>
+              </View>
 
               {task.items && task.items.map((item: any, index: number) => (
                 <View key={index} style={styles.itemRow}>
+                  <View style={styles.itemIconWrapper}>
+                    <Ionicons 
+                      name={
+                        item.category.toLowerCase().includes('plastik') ? 'water' :
+                        item.category.toLowerCase().includes('kertas') ? 'document' :
+                        item.category.toLowerCase().includes('logam') ? 'construct' :
+                        'trash'
+                      } 
+                      size={24} 
+                      color="#1565c0" 
+                    />
+                  </View>
                   <View style={styles.itemDetails}>
                     <Text style={styles.itemCategory}>{item.category}</Text>
                     <Text style={styles.itemEst}>Estimasi: {item.estimated_weight} Kg</Text>
@@ -279,11 +461,15 @@ export default function TaskDetailScreen() {
                     <View style={styles.weightInputContainer}>
                       <TextInput
                         style={styles.weightInput}
-                        keyboardType="numeric"
+                        keyboardType="decimal-pad"
                         placeholder="0.0"
                         placeholderTextColor="#999"
                         value={actualWeights[item.id] || ''}
                         onChangeText={(val) => handleUpdateWeight(item.id, val)}
+                        editable={true}
+                        selectTextOnFocus={true}
+                        returnKeyType="done"
+                        maxLength={10}
                       />
                       <Text style={styles.unitText}>Kg</Text>
                     </View>
@@ -302,19 +488,47 @@ export default function TaskDetailScreen() {
         <View style={styles.footer}>
           {task.status === 'waiting' ? (
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#e65100' }]}
+              style={styles.actionButton}
               onPress={handleAcceptTask}
               disabled={processing}
             >
-              {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.actionButtonText}>Terima & Menuju Lokasi</Text>}
+              <LinearGradient
+                colors={['#ff6b6b', '#ee5a6f']}
+                style={styles.actionGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                {processing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                    <Text style={styles.actionButtonText}>Terima & Menuju Lokasi</Text>
+                  </>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
           ) : task.status === 'on_the_way' ? (
             <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#1565c0' }]}
+              style={styles.actionButton}
               onPress={handleGenerateQRPress}
               disabled={processing}
             >
-              {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.actionButtonText}>Kirim Data & Verifikasi</Text>}
+              <LinearGradient
+                colors={['#4fc3f7', '#2196f3']}
+                style={styles.actionGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                {processing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="send" size={24} color="#fff" />
+                    <Text style={styles.actionButtonText}>Kirim Data & Verifikasi</Text>
+                  </>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -433,21 +647,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 60,
+    paddingTop: 50,
     paddingBottom: 20,
     paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    zIndex: 10,
   },
   backButton: {
-    padding: 5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
   },
   content: {
     flex: 1,
@@ -455,58 +670,152 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     marginBottom: 20,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  sectionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e3f2fd',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 15,
   },
   infoRow: {
     flexDirection: 'row',
-    marginBottom: 15,
+    marginBottom: 16,
   },
-  infoIcon: {
-    marginRight: 15,
-    marginTop: 2,
+  infoIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  infoContent: {
+    flex: 1,
   },
   infoLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#999',
-    marginBottom: 2,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   infoValue: {
     fontSize: 15,
     color: '#333',
-    fontWeight: '500',
+    fontWeight: '600',
     lineHeight: 22,
   },
-  itemsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
+  mapsButtonContainer: {
+    flexDirection: 'row',
+    marginVertical: 12,
+  },
+  embeddedMapContainer: {
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginVertical: 12,
+    borderWidth: 2,
+    borderColor: '#e3f2fd',
+  },
+  embeddedMap: {
+    flex: 1,
+  },
+  mapPlaceholder: {
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+  },
+  mapPlaceholderText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#999',
+  },
+  fullWidthMapButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  mapsButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  mapsGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  mapsButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  itemsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   itemRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    paddingVertical: 12,
+    borderBottomColor: '#f5f5f5',
+    paddingVertical: 16,
+  },
+  itemIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#e3f2fd',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   itemDetails: {
     flex: 1,
@@ -518,72 +827,102 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   itemEst: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
   },
   weightInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    backgroundColor: '#f5f7fa',
+    borderRadius: 12,
+    paddingHorizontal: 12,
     width: 100,
-    height: 40,
-    overflow: 'hidden',
+    height: 44,
+    borderWidth: 2,
+    borderColor: '#e3f2fd',
   },
   weightInput: {
     flex: 1,
-    minWidth: 0,
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1565c0',
     textAlign: 'center',
+    padding: 0,
   },
   unitText: {
     fontSize: 14,
-    color: '#666',
+    color: '#999',
     fontWeight: 'bold',
   },
   waitingText: {
     fontSize: 14,
-    color: '#999',
+    color: '#ccc',
     fontStyle: 'italic',
   },
   qrContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 30,
+    marginTop: 20,
+  },
+  qrGradient: {
+    borderRadius: 24,
+    padding: 40,
     alignItems: 'center',
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    marginTop: 20,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
   },
   qrTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
+    color: '#fff',
+    marginBottom: 12,
   },
   qrInstruction: {
     textAlign: 'center',
-    color: '#666',
+    color: '#fff',
     fontSize: 14,
     lineHeight: 22,
+    opacity: 0.9,
+  },
+  qrActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    marginTop: 16,
+    width: '100%',
+    gap: 8,
+  },
+  qrActionText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1565c0',
   },
   footer: {
     padding: 20,
     backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: '#f0f0f0',
   },
   actionButton: {
     borderRadius: 12,
-    height: 55,
-    justifyContent: 'center',
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  actionGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    height: 56,
+    gap: 8,
   },
   actionButtonText: {
     color: '#fff',
@@ -592,50 +931,55 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     width: '100%',
     alignItems: 'center',
+    elevation: 5,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 6,
+    color: '#333',
   },
   modalSubtitle: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    lineHeight: 20,
   },
   tokenInput: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f5f7fa',
     width: '100%',
-    height: 55,
+    height: 60,
     borderRadius: 12,
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     textAlign: 'center',
-    color: '#333',
-    letterSpacing: 2,
+    color: '#1565c0',
+    letterSpacing: 4,
+    borderWidth: 2,
+    borderColor: '#e3f2fd',
   },
   modalBtn: {
     flex: 1,
-    height: 45,
-    borderRadius: 8,
+    height: 48,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 5,
+    marginHorizontal: 6,
   },
   modalBtnText: {
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 15,
   }
 });

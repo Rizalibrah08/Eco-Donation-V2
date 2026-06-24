@@ -2,9 +2,11 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { useAuthStore } from '../store/useAuthStore';
 
+// Ganti dengan IP laptop Anda di jaringan yang sama
+// Untuk menemukan IP: buka CMD dan ketik 'ipconfig', cari IPv4 Address
 export const BASE_URL = Platform.OS === 'web' 
   ? 'http://localhost:3000/api'
-  : 'http://10.0.2.2:3000/api';
+  : 'http://192.168.1.3:3000/api'; // GANTI dengan IP laptop Anda
 
 const api = axios.create({
   baseURL: BASE_URL,

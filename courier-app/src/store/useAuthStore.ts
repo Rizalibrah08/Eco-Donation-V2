@@ -13,8 +13,10 @@ interface Courier {
 interface AuthState {
   user: Courier | null;
   token: string | null;
+  isHydrated: boolean;
   login: (user: Courier, token: string) => void;
   logout: () => void;
+  setHydrated: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -22,12 +24,17 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       token: null,
+      isHydrated: false,
       login: (user, token) => set({ user, token }),
-      logout: () => set({ user: null, token: null })
+      logout: () => set({ user: null, token: null }),
+      setHydrated: () => set({ isHydrated: true })
     }),
     {
       name: 'courier-auth-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated();
+      },
     }
   )
 );

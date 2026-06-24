@@ -39,6 +39,8 @@ function initDB() {
       status TEXT DEFAULT 'waiting',
       pickup_location TEXT,
       pickup_address TEXT,
+      latitude REAL,
+      longitude REAL,
       scheduled_at TEXT,
       verification_token TEXT,
       short_token TEXT,

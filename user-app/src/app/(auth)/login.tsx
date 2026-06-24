@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import api from '../../services/api';
@@ -43,67 +43,74 @@ export default function LoginScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      <LinearGradient
-        colors={['#004d40', '#00bfa5']}
-        style={styles.background}
-      />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <LinearGradient
+          colors={['#004d40', '#00bfa5']}
+          style={styles.background}
+        />
 
-      <View style={styles.card}>
-        <View style={styles.headerContainer}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="leaf" size={40} color="#00bfa5" />
-          </View>
-          <Text style={styles.title}>Eco-Donation</Text>
-          <Text style={styles.subtitle}>Ubah sampah menjadi kebaikan</Text>
-        </View>
-
-        <View style={styles.formContainer}>
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#999"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+        <View style={styles.card}>
+          <View style={styles.headerContainer}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="leaf" size={40} color="#00bfa5" />
+            </View>
+            <Text style={styles.title}>Eco-Donation</Text>
+            <Text style={styles.subtitle}>Ubah sampah menjadi kebaikan</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
+          <View style={styles.formContainer}>
+            <View style={styles.inputContainer}>
+              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor="#999"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
 
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.loginButtonText}>Masuk</Text>
-            )}
-          </TouchableOpacity>
+            <View style={styles.inputContainer}>
+              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+            </View>
 
-          <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>Belum punya akun? </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-              <Text style={styles.registerLink}>Daftar Sekarang</Text>
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.loginButtonText}>Masuk</Text>
+              )}
             </TouchableOpacity>
+
+            <View style={styles.registerContainer}>
+              <Text style={styles.registerText}>Belum punya akun? </Text>
+              <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+                <Text style={styles.registerLink}>Daftar Sekarang</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       <WarningModal
         visible={showWarning}
@@ -125,8 +132,12 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 40,
   },
   background: {
     position: 'absolute',

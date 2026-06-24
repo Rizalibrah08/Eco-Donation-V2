@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
+const { validateFull } = require('../utils/coordinateValidator');
 
 // Point rates per kg
 const RATES = { 'Botol Plastik': 800, 'Kertas': 600, 'Kaleng': 1000, 'Botol Kaca': 500 };
@@ -9,18 +10,46 @@ const RATES = { 'Botol Plastik': 800, 'Kertas': 600, 'Kaleng': 1000, 'Botol Kaca
 router.post('/', (req, res) => {
   const { user_id, items, pickup_address, scheduled_at, latitude, longitude } = req.body;
   if (!user_id || !items?.length) return res.status(400).json({ error: 'user_id and items required' });
-
-  let pickup_location = null;
-  if (latitude !== undefined && longitude !== undefined) {
-    pickup_location = JSON.stringify({ lat: latitude, lng: longitude });
+  
+  // Validasi koordinat - null check
+  if (!latitude || !longitude || latitude === 0 || longitude === 0) {
+    console.log('[COORD_VALIDATION] Failed: Missing coordinates');
+    return res.status(400).json({ error: 'Koordinat lokasi wajib diisi' });
   }
 
+  // Log received coordinates
+  console.log(`[COORD_VALIDATION] Received: lat=${latitude}, lng=${longitude}`);
+
+  // Validate coordinates using validator utility
+  const validation = validateFull(latitude, longitude);
+  
+  if (!validation.valid) {
+    console.log(`[COORD_VALIDATION] Validation: FAIL - ${validation.error}`);
+    return res.status(400).json({ error: validation.error });
+  }
+
+  // Log warning if outside Indonesia bounds (but still accept)
+  if (validation.warning) {
+    console.log(`[COORD_VALIDATION] ${validation.warning}`);
+  }
+
+  console.log('[COORD_VALIDATION] Validation: PASS');
+  console.log('📍 POST /pickups ->', {
+    user_id,
+    latitude,
+    longitude,
+    pickup_address
+  });
+
   const db = req.app.locals.db;
-  db.run('INSERT INTO pickup_orders (user_id, pickup_address, scheduled_at, pickup_location) VALUES (?, ?, ?, ?)',
-    [user_id, pickup_address, scheduled_at, pickup_location],
+  // Only use latitude and longitude columns (removed pickup_location JSON)
+  db.run('INSERT INTO pickup_orders (user_id, pickup_address, scheduled_at, latitude, longitude) VALUES (?, ?, ?, ?, ?)',
+    [user_id, pickup_address, scheduled_at, latitude, longitude],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       const orderId = this.lastID;
+      console.log(`[COORD_VALIDATION] Stored: id=${orderId}, lat=${latitude}, lng=${longitude}`);
+      console.log('✅ Pickup order created:', orderId, 'with coords:', latitude, longitude);
       const stmt = db.prepare('INSERT INTO pickup_items (order_id, category, estimated_weight) VALUES (?, ?, ?)');
       items.forEach(item => stmt.run(orderId, item.category, item.estimated_weight));
       stmt.finalize();
@@ -63,6 +92,17 @@ router.get('/:id', (req, res) => {
     WHERE po.id = ?`, [req.params.id], (err, order) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!order) return res.status(404).json({ error: 'Not found' });
+    
+    // Enhanced logging for coordinate retrieval
+    console.log(`[COORD_RETRIEVE] Order #${order.id}: lat=${order.latitude}, lng=${order.longitude}`);
+    console.log('📍 GET /pickups/:id ->', {
+      id: order.id,
+      latitude: order.latitude,
+      longitude: order.longitude,
+      type_lat: typeof order.latitude,
+      type_lng: typeof order.longitude
+    });
+    
     db.all('SELECT * FROM pickup_items WHERE order_id = ?', [order.id], (err, items) => {
       if (err) return res.status(500).json({ error: err.message });
       order.items = items || [];

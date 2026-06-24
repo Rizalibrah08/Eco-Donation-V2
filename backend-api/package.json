@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node index.js",
     "seed": "node seed.js",
-    "dev": "node index.js"
+    "dev": "node index.js",
+    "migrate": "node migrate-add-coordinates.js"
   },
   "keywords": [],
   "author": "",

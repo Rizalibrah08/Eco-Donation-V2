@@ -57,12 +57,12 @@ setTimeout(() => {
     const verifyToken = require('crypto').randomBytes(32).toString('hex');
     const shortToken = verifyToken.substring(0, 6).toUpperCase();
     const tokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // +7 days
-    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, verification_token, short_token, token_expires_at, created_at) VALUES
-      (1, 1, 'pending_verification', 'Jl. Sudirman No. 123', '2026-05-18 10:00', '${verifyToken}', '${shortToken}', '${tokenExpires}', '2026-05-17 08:00')`);
-    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, created_at) VALUES
-      (1, NULL, 'waiting', 'Universitas Indonesia', '2026-05-19 09:00', '2026-05-18 07:00')`);
-    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, completed_at, created_at) VALUES
-      (1, 1, 'completed', 'Jl. Merdeka No. 45', '2026-05-16 14:00', '2026-05-16 15:30', '2026-05-16 06:00')`);
+    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, latitude, longitude, verification_token, short_token, token_expires_at, created_at) VALUES
+      (1, 1, 'pending_verification', 'Jl. Sudirman No. 123', '2026-05-18 10:00', -6.2088, 106.8456, '${verifyToken}', '${shortToken}', '${tokenExpires}', '2026-05-17 08:00')`);
+    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, latitude, longitude, created_at) VALUES
+      (1, NULL, 'waiting', 'Universitas Indonesia', '2026-05-19 09:00', -6.3688, 106.8325, '2026-05-18 07:00')`);
+    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, latitude, longitude, completed_at, created_at) VALUES
+      (1, 1, 'completed', 'Jl. Merdeka No. 45', '2026-05-16 14:00', -6.1751, 106.8650, '2026-05-16 15:30', '2026-05-16 06:00')`);
 
     // Pickup items
     db.run(`INSERT INTO pickup_items (order_id, category, estimated_weight, actual_weight) VALUES (1, 'Botol Plastik', 2.5, 2.2)`);

@@ -15,7 +15,7 @@ export default function CampaignDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { user, updateUserPoints } = useAuthStore();
-  
+
   const [campaign, setCampaign] = useState<ExternalCampaign | null>(null);
   const [loading, setLoading] = useState(true);
   const [donateAmount, setDonateAmount] = useState('');
@@ -78,7 +78,7 @@ export default function CampaignDetailScreen() {
 
   const handleDonate = async () => {
     const amount = parseInt(donateAmount.replace(/\D/g, ''), 10);
-    
+
     if (!amount || amount <= 0) {
       setWarningMessage('Masukkan nominal donasi yang valid.');
       setShowWarning(true);
@@ -104,14 +104,14 @@ export default function CampaignDetailScreen() {
     setShowConfirmModal(false);
     setIsSubmitting(true);
     const amount = parseInt(donateAmount.replace(/\D/g, ''), 10);
-    
+
     try {
       await api.post('/donations', {
         user_id: user?.id,
         campaign_id: id as string, // Simpan ID campaign eksternal
         points: amount
       });
-      
+
       if (user) {
         updateUserPoints(user.points - amount);
       }
@@ -140,12 +140,19 @@ export default function CampaignDetailScreen() {
   const progress = Math.min(((campaign.collected_amount || 0) / (campaign.target_amount || 1)) * 100, 100);
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.imageContainer}>
-          <Image 
-            source={{ uri: campaign.image_url || 'https://via.placeholder.com/400x250.png?text=Campaign' }} 
-            style={styles.image} 
+          <Image
+            source={{ uri: campaign.image_url || 'https://via.placeholder.com/400x250.png?text=Campaign' }}
+            style={styles.image}
           />
           <LinearGradient
             colors={['rgba(0,0,0,0.5)', 'transparent']}
@@ -173,7 +180,7 @@ export default function CampaignDetailScreen() {
                 <Text style={styles.progressText}>{progress.toFixed(0)}% Pendanaan Global</Text>
               </View>
             </View>
-            
+
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Terkumpul</Text>
@@ -219,8 +226,8 @@ export default function CampaignDetailScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity 
-          style={styles.donateButton} 
+        <TouchableOpacity
+          style={styles.donateButton}
           onPress={handleDonate}
           disabled={isSubmitting}
         >
@@ -251,7 +258,7 @@ export default function CampaignDetailScreen() {
             <Text style={styles.modalMessage}>
               Terima kasih telah berdonasi sebesar {donatedAmount.toLocaleString('id-ID')} Poin.
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
                 setShowSuccessModal(false);

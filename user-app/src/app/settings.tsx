@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Switch, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/useAuthStore';
@@ -34,7 +34,7 @@ export default function SettingsScreen() {
         name,
         email,
       });
-      
+
       if (response.data) {
         updateUser({ name, email });
         Alert.alert('Sukses', 'Profil berhasil diperbarui.', [
@@ -54,82 +54,92 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Pengaturan Akun</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>Informasi Pribadi</Text>
-        
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Nama Lengkap</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="Masukkan nama Anda"
-            />
-          </View>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Pengaturan Akun</Text>
+          <View style={{ width: 24 }} />
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Masukkan email Anda"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Preferensi</Text>
-        
-        <View style={styles.preferenceRow}>
-          <View style={styles.preferenceLeft}>
-            <Ionicons name="notifications-outline" size={22} color="#666" />
-            <Text style={styles.preferenceText}>Notifikasi Push</Text>
-          </View>
-          <Switch
-            value={notificationsEnabled}
-            onValueChange={setNotificationsEnabled}
-            trackColor={{ false: '#e0e0e0', true: '#80dfd2' }}
-            thumbColor={notificationsEnabled ? '#00bfa5' : '#f4f3f4'}
-          />
-        </View>
-
-        <Text style={styles.sectionTitle}>Keamanan</Text>
-        
-        <TouchableOpacity style={styles.actionButton} onPress={handleChangePassword}>
-          <Ionicons name="lock-closed-outline" size={22} color="#666" />
-          <Text style={styles.actionButtonText}>Ubah Kata Sandi</Text>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]} 
-          onPress={handleSave}
-          disabled={isSubmitting}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {isSubmitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>Simpan Perubahan</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+          <Text style={styles.sectionTitle}>Informasi Pribadi</Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Nama Lengkap</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="Masukkan nama Anda"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Masukkan email Anda"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+
+          <Text style={styles.sectionTitle}>Preferensi</Text>
+
+          <View style={styles.preferenceRow}>
+            <View style={styles.preferenceLeft}>
+              <Ionicons name="notifications-outline" size={22} color="#666" />
+              <Text style={styles.preferenceText}>Notifikasi Push</Text>
+            </View>
+            <Switch
+              value={notificationsEnabled}
+              onValueChange={setNotificationsEnabled}
+              trackColor={{ false: '#e0e0e0', true: '#80dfd2' }}
+              thumbColor={notificationsEnabled ? '#00bfa5' : '#f4f3f4'}
+            />
+          </View>
+
+          <Text style={styles.sectionTitle}>Keamanan</Text>
+
+          <TouchableOpacity style={styles.actionButton} onPress={handleChangePassword}>
+            <Ionicons name="lock-closed-outline" size={22} color="#666" />
+            <Text style={styles.actionButtonText}>Ubah Kata Sandi</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>Simpan Perubahan</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 

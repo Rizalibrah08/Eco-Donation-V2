@@ -310,8 +310,9 @@ export default function SetorScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <LinearGradient colors={['#004d40', '#00bfa5']} style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => {
@@ -326,7 +327,11 @@ export default function SetorScreen() {
         <Text style={styles.headerTitle}>Setor Sampah</Text>
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.sectionTitle}>Detail Barang</Text>
 
         {categories.map((item, index) => (
@@ -503,7 +508,7 @@ export default function SetorScreen() {
               value={date}
               mode="date"
               display="default"
-              onChange={(event: any, selectedDate: any) => {
+              onChange={(event: any, selectedDate: Date | undefined) => {
                 setShowDatePicker(false);
                 if (selectedDate) setDate(selectedDate);
               }}
@@ -515,7 +520,7 @@ export default function SetorScreen() {
               value={time}
               mode="time"
               display="default"
-              onChange={(event: any, selectedTime: any) => {
+              onChange={(event: any, selectedTime: Date | undefined) => {
                 setShowTimePicker(false);
                 if (selectedTime) setTime(selectedTime);
               }}
