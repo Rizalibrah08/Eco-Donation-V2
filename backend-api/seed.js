@@ -2,6 +2,7 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { DB_PATH } = require('./src/config/env');
 const { openDb } = require('./src/db');
+const { createBadgeService } = require('./src/services/badgeService');
 
 for (const suffix of ['', '-wal', '-shm']) {
   if (fs.existsSync(DB_PATH + suffix)) fs.unlinkSync(DB_PATH + suffix);
@@ -77,6 +78,9 @@ db.transaction(() => {
   insertTrx.run(1, 'donasi', 'Donasi ke Panti Asuhan Harapan', 'Panti Asuhan Harapan', -5000, 'donation', null, daysFromNow(-4, 15));
   insertTrx.run(1, 'setor', 'Setor Sampah Kaleng', 'Kaleng 3 kg', 3000, 'pickup', null, daysFromNow(-6, 10));
 })();
+
+const badges = createBadgeService({ db, notifier: null });
+for (const { id } of db.prepare('SELECT id FROM users').all()) badges.evaluate(id);
 
 console.log(`Database berhasil dibuat di ${DB_PATH}`);
 console.log('Akun demo (sandi 123456): satrio@email.com, budi@email.com, andi@kurir.com, bima@kurir.com');

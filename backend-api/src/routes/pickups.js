@@ -45,6 +45,10 @@ const weighSchema = z.object({
     .min(1, 'Berat aktual wajib diisi.'),
 });
 
+const locationSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+});
 const reasonSchema = z.object({ reason: z.string().trim().max(200).optional() });
 const approveSchema = z.object({ code: z.string().trim().min(4, 'Kode verifikasi tidak valid.').max(12) });
 const listSchema = z.object({
@@ -92,6 +96,12 @@ module.exports = function pickupRoutes({ services, now }) {
   router.post('/pickups/:id/weigh', courierOnly, validate({ params: idParams, body: weighSchema }), (req, res) => {
     res.json(pickups.weigh(req.valid.params.id, req.auth.id, req.valid.body.items));
   });
+
+  router.post('/pickups/:id/location', courierOnly, validate({ params: idParams, body: locationSchema }),
+    (req, res) => {
+      const { lat, lng } = req.valid.body;
+      res.json(pickups.updateCourierLocation(req.valid.params.id, req.auth.id, lat, lng));
+    });
 
   router.post('/pickups/:id/code', courierOnly, validate({ params: idParams }), (req, res) => {
     res.json(pickups.regenerateCode(req.valid.params.id, req.auth.id));

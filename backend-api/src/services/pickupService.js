@@ -2,12 +2,15 @@ const { TOKEN_TTL_MIN, MAX_CODE_ATTEMPTS } = require('../config/env');
 const { calculate } = require('../config/rates');
 const { HttpError } = require('../middleware/error');
 const { generateCode, hashCode, codesMatch } = require('../utils/code');
+const { distanceMeters, etaMinutes } = require('../utils/geo');
+
+const NEAR_METERS = 500;
 
 const notFound = () => new HttpError(404, 'ORDER_NOT_FOUND', 'Order penjemputan tidak ditemukan.');
 const invalidStatus = (message = 'Aksi ini tidak dapat dilakukan pada status order saat ini.') =>
   new HttpError(409, 'INVALID_STATUS', message);
 
-const HIDDEN = ['verification_code_hash', 'code_attempts'];
+const HIDDEN = ['verification_code_hash', 'code_attempts', 'near_notified'];
 
 function createPickupService({ db, notifier, now = () => new Date(), hooks = {} }) {
   const iso = () => now().toISOString();
@@ -208,6 +211,28 @@ function createPickupService({ db, notifier, now = () => new Date(), hooks = {} 
       return issued;
     },
 
+    updateCourierLocation(id, courierId, lat, lng) {
+      const order = loadAssigned(id, courierId);
+      if (order.status !== 'on_the_way') throw invalidStatus('Lokasi hanya dikirim saat menuju lokasi pengguna.');
+      const at = iso();
+      const distance = distanceMeters(lat, lng, order.pickup_lat, order.pickup_lng);
+      const eta = etaMinutes(distance);
+      db.prepare('UPDATE pickup_orders SET courier_lat = ?, courier_lng = ?, courier_location_at = ? WHERE id = ?')
+        .run(lat, lng, at, id);
+      const location = { orderId: id, lat, lng, distance_m: distance, eta_min: eta, at };
+      notifier.emitTo('user', order.user_id, 'order:location', location);
+      if (distance <= NEAR_METERS && !order.near_notified) {
+        db.prepare('UPDATE pickup_orders SET near_notified = 1 WHERE id = ?').run(id);
+        notifier.notify('user', order.user_id, 'order:near', {
+          orderId: id,
+          title: 'Kurir Hampir Sampai',
+          message: `Kurir tiba dalam sekitar ${eta} menit. Siapkan sampah Anda!`,
+          data: { distance_m: distance, eta_min: eta },
+        });
+      }
+      return location;
+    },
+
     regenerateCode(id, courierId) {
       const order = loadAssigned(id, courierId);
       if (order.status !== 'pending_verification') throw invalidStatus();
@@ -257,9 +282,9 @@ function createPickupService({ db, notifier, now = () => new Date(), hooks = {} 
         db.prepare(`INSERT INTO transactions (user_id, type, title, description, points, ref_type, ref_id, created_at)
                     VALUES (?, 'setor', ?, ?, ?, 'pickup', ?, ?)`)
           .run(userId, `Setor Sampah #${id}`, description, sum.total_points, id, iso());
-        if (hooks.onPickupCompleted) hooks.onPickupCompleted(userId);
         return db.prepare('SELECT points FROM users WHERE id = ?').get(userId).points;
       })();
+      if (hooks.onStatsChanged) hooks.onStatsChanged(userId);
 
       notifier.notify('user', userId, 'order:completed', {
         orderId: id,

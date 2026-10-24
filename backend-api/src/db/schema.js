@@ -132,6 +132,13 @@ const MIGRATIONS = [
   );
   CREATE INDEX idx_notif_recipient ON notifications(recipient_role, recipient_id, is_read);
   `,
+  // v2: live tracking kurir
+  `
+  ALTER TABLE pickup_orders ADD COLUMN courier_lat REAL;
+  ALTER TABLE pickup_orders ADD COLUMN courier_lng REAL;
+  ALTER TABLE pickup_orders ADD COLUMN courier_location_at TEXT;
+  ALTER TABLE pickup_orders ADD COLUMN near_notified INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 function migrate(db) {

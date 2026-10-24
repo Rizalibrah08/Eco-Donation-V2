@@ -35,6 +35,11 @@ function createNotificationService(db, emitter = { emit() {} }) {
       return notification;
     },
 
+    // Event sesaat ke satu penerima tanpa disimpan (mis. lokasi kurir).
+    emitTo(role, recipientId, event, payload) {
+      out.emit(`${role}:${recipientId}`, event, payload);
+    },
+
     // Broadcast ke semua kurir (tidak disimpan).
     broadcastCouriers(event, payload) {
       out.emit('couriers', event, payload);

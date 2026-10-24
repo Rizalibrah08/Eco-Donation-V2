@@ -11,13 +11,22 @@ const { createAuthService } = require('./services/authService');
 const { createUserService } = require('./services/userService');
 const { createPickupService } = require('./services/pickupService');
 const { createCampaignService } = require('./services/campaignService');
+const { createBadgeService } = require('./services/badgeService');
 
 // createApp({ db, emitter?, now? }) → { app, services }
 function createApp({ db, emitter, now = () => new Date(), hooks = {} }) {
   const notifications = createNotificationService(db, emitter);
-  const ctx = { db, notifier: notifications, now, hooks };
+  const badges = createBadgeService({ db, notifier: notifications });
+  const ctx = {
+    db,
+    notifier: notifications,
+    badges,
+    now,
+    hooks: { onStatsChanged: (userId) => badges.evaluate(userId), ...hooks },
+  };
   const services = {
     notifications,
+    badges,
     auth: createAuthService(ctx),
     users: createUserService(ctx),
     pickups: createPickupService(ctx),

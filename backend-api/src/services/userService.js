@@ -3,7 +3,7 @@ const { BCRYPT_COST } = require('../config/env');
 const { HttpError } = require('../middleware/error');
 const { USER_FIELDS } = require('./authService');
 
-function createUserService({ db }) {
+function createUserService({ db, badges }) {
   const getUser = (id) => {
     const user = db.prepare(`SELECT ${USER_FIELDS} FROM users WHERE id = ?`).get(id);
     if (!user) throw new HttpError(404, 'USER_NOT_FOUND', 'Pengguna tidak ditemukan.');
@@ -13,10 +13,7 @@ function createUserService({ db }) {
   return {
     me(id) {
       const user = getUser(id);
-      const badges = db
-        .prepare('SELECT name, tier, icon, unlocked_at FROM badges WHERE user_id = ? ORDER BY unlocked_at')
-        .all(id);
-      return { ...user, role: 'user', badges };
+      return { ...user, role: 'user', badges: badges.list(id) };
     },
 
     update(id, { name, phone }) {

@@ -7,7 +7,7 @@ function parse(row) {
   return { ...row, updates: JSON.parse(row.updates || '[]') };
 }
 
-function createCampaignService({ db, now = () => new Date() }) {
+function createCampaignService({ db, now = () => new Date(), hooks = {} }) {
   const iso = () => now().toISOString();
 
   function stats(campaignId) {
@@ -48,6 +48,12 @@ function createCampaignService({ db, now = () => new Date() }) {
 
     // Seluruh langkah donasi dalam satu transaksi: gagal di tengah → rollback.
     donate(userId, body) {
+      const result = this.donateTx(userId, body);
+      if (hooks.onStatsChanged) hooks.onStatsChanged(userId);
+      return result;
+    },
+
+    donateTx(userId, body) {
       return db.transaction(() => {
         let campaign;
         if (body.source === 'everyorg') {
