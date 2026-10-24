@@ -6,24 +6,24 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "userapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#004d40",
+        "backgroundColor": "#0A5C4C",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA"
       ],
-      "package": "com.anonymous.userapp"
+      "package": "com.anonymous.userapp",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -31,12 +31,6 @@
     },
     "plugins": [
       "expo-router",
-      [
-        "react-native-maps",
-        {
-          "useGoogleMaps": false
-        }
-      ],
       [
         "expo-location",
         {
@@ -46,13 +40,14 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#004d40"
+          "backgroundColor": "#0A5C4C"
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Izinkan Eco-Donation mengakses kamera untuk scan QR Code kurir."
+          "cameraPermission": "Izinkan Eco-Donation mengakses kamera untuk memindai QR Code kurir.",
+          "recordAudioAndroid": false
         }
       ]
     ],

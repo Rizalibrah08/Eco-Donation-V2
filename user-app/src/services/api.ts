@@ -1,38 +1,40 @@
 import axios from 'axios';
-import { Platform } from 'react-native';
-import { useAuthStore } from '../store/useAuthStore';
-
-// Gunakan localhost untuk Web/Simulator, atau ganti dengan IP Address laptop Anda untuk physical device.
-// PENTING: Ganti IP ini dengan IP laptop kamu (cek dengan ipconfig di CMD)
-export const BASE_URL = Platform.OS === 'web' 
-  ? 'http://localhost:3000/api'
-  : 'http://192.168.1.3:3000/api'; // IP laptop kamu
+import { API_URL } from '../lib/config';
+import { useAuthStore } from '../store/auth';
 
 const api = axios.create({
-  baseURL: BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: `${API_URL}/api`,
+  timeout: 15000,
+  headers: { 'Content-Type': 'application/json' },
 });
 
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Auto-logout on 401 Unauthorized (e.g., expired or invalid token)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      const { logout } = useAuthStore.getState();
-      logout();
+    if (error.response?.status === 401 && useAuthStore.getState().token) {
+      useAuthStore.getState().logout();
     }
     return Promise.reject(error);
-  }
+  },
 );
+
+// Pesan error yang ramah pengguna dari respons backend ({ error: { code, message } }).
+export function getErrorMessage(error: unknown, fallback = 'Terjadi kesalahan. Silakan coba lagi.'): string {
+  const err = error as { response?: { data?: { error?: { message?: string } } }; request?: unknown; code?: string };
+  if (err?.response?.data?.error?.message) return err.response.data.error.message;
+  if (err?.code === 'ECONNABORTED') return 'Server terlalu lama merespons. Periksa koneksi Anda.';
+  if (err?.request && !err.response) return 'Tidak dapat terhubung ke server. Pastikan backend berjalan dan perangkat satu jaringan.';
+  return fallback;
+}
+
+export function getErrorCode(error: unknown): string | undefined {
+  return (error as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
+}
 
 export default api;

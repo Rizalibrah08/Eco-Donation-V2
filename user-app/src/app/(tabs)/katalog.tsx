@@ -1,245 +1,182 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { globalGivingService, ExternalCampaign } from '../../services/globalGivingService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import api, { getErrorMessage } from '../../services/api';
+import { browseNonprofits, searchNonprofits, GlobalNonprofit } from '../../services/everyOrg';
+import { useDebounce } from '../../hooks/useDebounce';
+import { CampaignCard } from '../../components/CampaignCard';
+import { GlobalCard } from '../../components/GlobalCard';
+import {
+  Chip, EmptyState, Input, Segmented, SkeletonCard, Text, colors, spacing,
+} from '../../ui';
+import type { Campaign } from '../../lib/types';
+
+const CATEGORIES = ['Semua', 'Pendidikan', 'Lingkungan', 'Bencana Alam', 'Panti Asuhan'];
+type Tab = 'local' | 'global';
 
 export default function KatalogScreen() {
-  const [campaigns, setCampaigns] = useState<ExternalCampaign[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
   const router = useRouter();
-
-  useEffect(() => {
-    fetchCampaigns(1);
-  }, []);
-
-  const fetchCampaigns = async (pageNumber: number) => {
-    try {
-      if (pageNumber === 1) setLoading(true);
-      else setLoadingMore(true);
-
-      const data = await globalGivingService.fetchCampaigns(pageNumber, 10);
-      
-      if (data.length === 0) {
-        setHasMore(false);
-      } else {
-        if (pageNumber === 1) {
-          setCampaigns(data);
-        } else {
-          setCampaigns(prev => [...prev, ...data]);
-        }
-        setPage(pageNumber);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  };
-
-  const handleLoadMore = () => {
-    if (!loadingMore && hasMore) {
-      fetchCampaigns(page + 1);
-    }
-  };
-
-  const renderItem = ({ item }: { item: ExternalCampaign }) => {
-    const progress = Math.min(((item.collected_amount || 0) / (item.target_amount || 1)) * 100, 100);
-    
-    return (
-      <TouchableOpacity 
-        style={styles.card}
-        onPress={() => router.push(`/campaign/${item.id}`)}
-      >
-        <Image 
-          source={{ uri: item.image_url || 'https://via.placeholder.com/300x150.png?text=Campaign' }} 
-          style={styles.image} 
-        />
-        <View style={styles.cardBody}>
-          <View style={styles.badgesContainer}>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{item.category}</Text>
-            </View>
-            <View style={styles.sourceBadge}>
-              <Text style={styles.sourceText}>Sumber: GlobalGiving</Text>
-            </View>
-          </View>
-          <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
-          
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
-            </View>
-            <View style={styles.progressTextContainer}>
-              <Text style={styles.progressText}>Terkumpul {progress.toFixed(0)}%</Text>
-              <Text style={styles.targetText}>dari Rp {(item.target_amount || 0).toLocaleString('id-ID')}</Text>
-            </View>
-          </View>
-          
-          <View style={styles.donateButton}>
-            <Text style={styles.donateButtonText}>Donasi Sekarang</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const insets = useSafeAreaInsets();
+  const [tab, setTab] = useState<Tab>('local');
+  const [query, setQuery] = useState('');
+  const debounced = useDebounce(query, 400);
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={['#004d40', '#00bfa5']} style={styles.header}>
-        <Text style={styles.headerTitle}>Katalog Donasi</Text>
-        <Text style={styles.headerSubtitle}>Salurkan kebaikanmu ke tempat yang tepat</Text>
-      </LinearGradient>
-
-      {loading ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#00bfa5" />
-        </View>
-      ) : (
-        <FlatList
-          data={campaigns}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#00bfa5" style={{marginVertical: 20}} /> : null}
+    <View style={[styles.root, { paddingTop: insets.top + spacing.md }]}>
+      <View style={styles.header}>
+        <Text variant="title">Salurkan Donasi</Text>
+        <Text variant="bodySmall" tone="muted" style={styles.sub}>Tukarkan poin Anda untuk kampanye sosial pilihan.</Text>
+        <Segmented
+          value={tab}
+          onChange={(v) => { setTab(v); setQuery(''); }}
+          options={[{ value: 'local', label: 'Kampanye Lokal' }, { value: 'global', label: 'Organisasi Global' }]}
+          style={styles.segment}
         />
+        <Input
+          icon="search"
+          placeholder={tab === 'local' ? 'Cari kampanye atau penyelenggara' : 'Cari organisasi lingkungan (Inggris)'}
+          value={query}
+          onChangeText={setQuery}
+          returnKeyType="search"
+          autoCorrect={false}
+        />
+      </View>
+      {tab === 'local' ? (
+        <LocalList search={debounced} onOpen={(id) => router.push(`/campaign/${id}`)} />
+      ) : (
+        <GlobalList search={debounced} onOpen={(id) => router.push(`/campaign/global/${encodeURIComponent(id)}`)} />
       )}
     </View>
   );
 }
 
+function LocalList({ search, onOpen }: { search: string; onOpen: (id: number) => void }) {
+  const [category, setCategory] = useState('Semua');
+  const [items, setItems] = useState<Campaign[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const { data } = await api.get<Campaign[]>('/campaigns', { params: { category, search: search || undefined } });
+      setItems(data);
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setItems([]);
+    }
+  }, [category, search]);
+
+  useEffect(() => { setItems(null); load(); }, [load]);
+
+  return (
+    <FlatList
+      data={items || []}
+      keyExtractor={(c) => String(c.id)}
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+      refreshing={refreshing}
+      onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}
+      ListHeaderComponent={
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {CATEGORIES.map((c) => <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />)}
+        </ScrollView>
+      }
+      renderItem={({ item }) => <CampaignCard campaign={item} onPress={() => onOpen(item.id)} />}
+      ListEmptyComponent={
+        items === null ? (
+          <View>{[0, 1].map((i) => <SkeletonCard key={i} lines={4} />)}</View>
+        ) : error ? (
+          <EmptyState icon="cloud-offline-outline" title="Gagal memuat" message={error} actionLabel="Coba lagi" onAction={load} />
+        ) : (
+          <EmptyState icon="search-outline" title="Kampanye tidak ditemukan" message="Coba kata kunci atau kategori lain." />
+        )
+      }
+    />
+  );
+}
+
+function GlobalList({ search, onOpen }: { search: string; onOpen: (id: string) => void }) {
+  const [items, setItems] = useState<GlobalNonprofit[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const page = useRef(1);
+  const hasMore = useRef(true);
+
+  const loadFirst = useCallback(async () => {
+    setItems(null);
+    setError(null);
+    page.current = 1;
+    try {
+      if (search.trim().length >= 3) {
+        setItems(await searchNonprofits(search.trim()));
+        hasMore.current = false;
+      } else {
+        const res = await browseNonprofits(1);
+        setItems(res.items);
+        hasMore.current = res.hasMore;
+      }
+    } catch {
+      setError('Tidak dapat memuat data dari Every.org. Periksa koneksi internet Anda.');
+      setItems([]);
+    }
+  }, [search]);
+
+  useEffect(() => { loadFirst(); }, [loadFirst]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore.current || !items?.length || search.trim().length >= 3) return;
+    setLoadingMore(true);
+    try {
+      const res = await browseNonprofits(page.current + 1);
+      page.current += 1;
+      hasMore.current = res.hasMore;
+      setItems((prev) => {
+        const seen = new Set((prev || []).map((p) => p.id));
+        return [...(prev || []), ...res.items.filter((i) => !seen.has(i.id))];
+      });
+    } catch {
+      hasMore.current = false;
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  return (
+    <FlatList
+      data={items || []}
+      keyExtractor={(c) => c.id}
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+      onEndReached={loadMore}
+      onEndReachedThreshold={0.4}
+      ListHeaderComponent={
+        <Text variant="caption" tone="subtle" style={styles.note}>
+          Data organisasi dari Every.org. Donasi poin dicatat oleh Eco-Donation dan disalurkan secara berkala.
+        </Text>
+      }
+      renderItem={({ item }) => <GlobalCard item={item} onPress={() => onOpen(item.id)} />}
+      ListFooterComponent={loadingMore ? <SkeletonCard lines={2} /> : null}
+      ListEmptyComponent={
+        items === null ? (
+          <View>{[0, 1].map((i) => <SkeletonCard key={i} lines={3} />)}</View>
+        ) : error ? (
+          <EmptyState icon="cloud-offline-outline" title="Gagal memuat" message={error} actionLabel="Coba lagi" onAction={loadFirst} />
+        ) : (
+          <EmptyState icon="search-outline" title="Organisasi tidak ditemukan" message="Coba kata kunci lain dalam bahasa Inggris." />
+        )
+      }
+    />
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9f9f9',
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 30,
-    paddingHorizontal: 25,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#e0f2f1',
-  },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContainer: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    marginBottom: 20,
-    overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  image: {
-    width: '100%',
-    height: 150,
-  },
-  cardBody: {
-    padding: 15,
-  },
-  badgesContainer: {
-    flexDirection: 'row',
-    marginBottom: 8,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  categoryBadge: {
-    backgroundColor: '#e0f2f1',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  categoryText: {
-    color: '#004d40',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  sourceBadge: {
-    backgroundColor: '#fff3e0',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  sourceText: {
-    color: '#e65100',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-    lineHeight: 24,
-  },
-  progressContainer: {
-    marginBottom: 15,
-  },
-  progressBarBg: {
-    height: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#00bfa5',
-  },
-  progressTextContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  progressText: {
-    fontSize: 12,
-    color: '#00bfa5',
-    fontWeight: 'bold',
-  },
-  targetText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  donateButton: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#00bfa5',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  donateButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
+  root: { flex: 1, backgroundColor: colors.bg },
+  header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  sub: { marginTop: 2 },
+  segment: { marginVertical: spacing.lg },
+  chips: { gap: spacing.sm, paddingBottom: spacing.lg },
+  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl },
+  note: { marginBottom: spacing.md },
 });
