@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { AppBar, Button, Card, Screen, Text, colors, radius, spacing } from '../ui';
+import { AppBar, Button, Card, Screen, Text, colors, radius, spacing, Icon } from '../ui';
 
 const FAQS = [
   {
@@ -46,22 +45,17 @@ export default function HelpScreen() {
 
   return (
     <Screen header={<AppBar title="Pusat bantuan" />}>
-      <Card style={styles.contact}>
-        <View style={styles.contactIcon}>
-          <Ionicons name="headset" size={26} color={colors.primary} />
-        </View>
-        <View style={styles.flex}>
-          <Text variant="subheading">Butuh bantuan langsung?</Text>
-          <Text variant="bodySmall" tone="muted">Tim kami membalas email pada hari kerja.</Text>
-        </View>
-      </Card>
-      <Button
-        title="Kirim email ke tim dukungan"
-        icon="mail-outline"
-        variant="secondary"
-        style={styles.contactBtn}
-        onPress={() => Linking.openURL('mailto:support@ecodonation.com?subject=Bantuan%20Aplikasi')}
-      />
+      <View style={styles.contact}>
+        <Text variant="heading" style={styles.contactTitle}>Butuh bantuan langsung?</Text>
+        <Text variant="bodySmall" style={styles.contactText}>Tim kami membalas email pada hari kerja.</Text>
+        <Button
+          title="Kirim email ke tim dukungan"
+          icon="mail-outline"
+          variant="secondary"
+          style={styles.contactBtn}
+          onPress={() => Linking.openURL('mailto:support@ecodonation.com?subject=Bantuan%20Aplikasi')}
+        />
+      </View>
 
       <Text variant="heading" style={styles.section}>Pertanyaan umum</Text>
       <Card padded={false} style={styles.list}>
@@ -75,11 +69,11 @@ export default function HelpScreen() {
                 onPress={() => setOpen(expanded ? null : i)}
                 style={({ pressed }) => [styles.q, pressed && styles.pressed]}
               >
-                <Text variant="subheading" tone={expanded ? 'primary' : 'default'} style={styles.flex}>
+                <Text variant="body" weight={expanded ? '600' : '500'} tone={expanded ? 'primary' : 'default'} style={styles.flex}>
                   {faq.question}
                 </Text>
-                <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18}
-                  color={expanded ? colors.primary : colors.textSubtle} />
+                <Icon name={expanded ? 'remove' : 'add'} size={20}
+                  color={expanded ? colors.primary : colors.textMuted} />
               </Pressable>
               {expanded && (
                 <Text variant="bodySmall" tone="muted" style={styles.a}>{faq.answer}</Text>
@@ -94,16 +88,14 @@ export default function HelpScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  contact: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.primarySoft, borderColor: colors.primarySoft },
-  contactIcon: {
-    width: 52, height: 52, borderRadius: 26, backgroundColor: colors.surface,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  contactBtn: { marginTop: spacing.md },
+  contact: { backgroundColor: colors.primarySoft, borderRadius: radius.card, padding: spacing.xl },
+  contactTitle: { color: colors.primaryDark },
+  contactText: { color: colors.primary, marginTop: spacing.xs },
+  contactBtn: { marginTop: spacing.lg, alignSelf: 'flex-start' },
   section: { marginTop: spacing.xxl, marginBottom: spacing.md },
   list: { overflow: 'hidden' },
-  rowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
-  q: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
+  rowBorder: { borderTopWidth: 1, borderTopColor: colors.rule },
+  q: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
   pressed: { backgroundColor: colors.surfaceAlt },
-  a: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, marginTop: -spacing.xs, borderRadius: radius.sm },
+  a: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, marginTop: -spacing.xs },
 });

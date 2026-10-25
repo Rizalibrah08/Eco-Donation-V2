@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Text, colors, spacing } from '../ui';
+import { Text, colors, spacing, Icon } from '../ui';
 import { TIMELINE } from '../lib/status';
 import { formatTime } from '../lib/format';
 import type { PickupOrder } from '../lib/types';
@@ -27,16 +26,23 @@ export function StatusTimeline({ order }: { order: PickupOrder }) {
           <View key={step.status} style={styles.row}>
             <View style={styles.rail}>
               <View style={[styles.dot, done && styles.dotDone, active && styles.dotActive]}>
-                {done && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
-                {active && <View style={styles.pulse} />}
+                {done && <Icon name="checkmark" size={12} color="#FFFFFF" />}
+                {active && <View style={styles.inner} />}
               </View>
               {!last && <View style={[styles.line, done && styles.lineDone]} />}
             </View>
-            <View style={[styles.body, last && { paddingBottom: 0 }]}>
-              <Text variant="bodySmall" weight={active ? '700' : '600'} tone={done || active ? 'default' : 'subtle'}>
+            <View style={[styles.body, last && styles.bodyLast]}>
+              <Text
+                variant="bodySmall"
+                weight={active ? '600' : done ? '500' : '400'}
+                tone={done || active ? 'default' : 'muted'}
+                style={styles.label}
+              >
                 {step.label}
               </Text>
-              {time && (done || active) && <Text variant="caption" tone="subtle">{formatTime(time)}</Text>}
+              {time && (done || active) && (
+                <Text variant="bodySmall" tone="muted" tabular>{formatTime(time)}</Text>
+              )}
             </View>
           </View>
         );
@@ -47,21 +53,30 @@ export function StatusTimeline({ order }: { order: PickupOrder }) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row' },
-  rail: { width: 28, alignItems: 'center' },
+  rail: { width: 20, alignItems: 'center' },
   dot: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dotDone: { backgroundColor: colors.primary, borderColor: colors.primary },
-  dotActive: { borderColor: colors.primary },
-  pulse: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
-  line: { width: 2, flex: 1, minHeight: 18, backgroundColor: colors.border, marginVertical: 2 },
+  dotActive: { borderColor: colors.primary, borderWidth: 2 },
+  inner: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
+  line: { width: 1.5, flex: 1, minHeight: 16, backgroundColor: colors.border, marginVertical: 3 },
   lineDone: { backgroundColor: colors.primary },
-  body: { flex: 1, paddingLeft: spacing.sm, paddingBottom: spacing.lg, flexDirection: 'row', justifyContent: 'space-between' },
+  body: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingLeft: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  bodyLast: { paddingBottom: 0 },
+  label: { flex: 1, marginTop: 1 },
 });

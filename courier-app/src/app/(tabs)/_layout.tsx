@@ -1,15 +1,16 @@
 import React from 'react';
 import { ColorValue, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../../ui';
+import { colors, fonts, Icon } from '../../ui';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
 const icon = (active: IconName, idle: IconName) =>
   function TabIcon({ color, focused }: { color: ColorValue; focused: boolean }) {
-    return <Ionicons name={focused ? active : idle} size={23} color={color} />;
+    // Set ikon outline yang sama; status aktif ditandai warna, bukan ikon terisi.
+    return <Icon name={focused ? active : idle} size={22} color={color as string} />;
   };
 
 export default function TabLayout() {
@@ -19,8 +20,8 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSubtle,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: { fontSize: 12, fontFamily: fonts.medium },
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
@@ -30,9 +31,9 @@ export default function TabLayout() {
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Tugas', tabBarIcon: icon('bicycle', 'bicycle-outline') }} />
-      <Tabs.Screen name="riwayat" options={{ title: 'Riwayat', tabBarIcon: icon('time', 'time-outline') }} />
-      <Tabs.Screen name="profil" options={{ title: 'Profil', tabBarIcon: icon('person-circle', 'person-circle-outline') }} />
+      <Tabs.Screen name="index" options={{ title: 'Tugas', tabBarIcon: icon('bicycle-outline', 'bicycle-outline') }} />
+      <Tabs.Screen name="riwayat" options={{ title: 'Riwayat', tabBarIcon: icon('time-outline', 'time-outline') }} />
+      <Tabs.Screen name="profil" options={{ title: 'Profil', tabBarIcon: icon('person-outline', 'person-outline') }} />
     </Tabs>
   );
 }

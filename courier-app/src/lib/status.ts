@@ -4,19 +4,20 @@ import type { PickupStatus } from './types';
 
 // Label dari sudut pandang kurir.
 export const STATUS: Record<PickupStatus, { label: string; tone: PillTone; icon: keyof typeof Ionicons.glyphMap }> = {
-  waiting: { label: 'Tersedia', tone: 'info', icon: 'flash' },
-  on_the_way: { label: 'Menuju Lokasi', tone: 'warning', icon: 'bicycle' },
-  arrived: { label: 'Tiba – Timbang', tone: 'primary', icon: 'scale' },
-  pending_verification: { label: 'Menunggu Persetujuan', tone: 'warning', icon: 'qr-code' },
+  waiting: { label: 'Tersedia', tone: 'neutral', icon: 'flash' },
+  on_the_way: { label: 'Menuju lokasi', tone: 'warning', icon: 'bicycle' },
+  arrived: { label: 'Tiba · timbang', tone: 'primary', icon: 'scale' },
+  pending_verification: { label: 'Menunggu persetujuan', tone: 'warning', icon: 'qr-code' },
   completed: { label: 'Selesai', tone: 'success', icon: 'checkmark-circle' },
   cancelled: { label: 'Dibatalkan', tone: 'danger', icon: 'close-circle' },
 };
 
-export const CATEGORY_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
-  'Botol Plastik': { icon: 'water', color: '#0EA5E9' },
-  Kertas: { icon: 'document-text', color: '#D97706' },
-  Kaleng: { icon: 'beer', color: '#64748B' },
-  'Botol Kaca': { icon: 'wine', color: '#10B981' },
+// Warna kategori = tinta dari pasangan pastel di theme.category (lihat ui/Category.tsx).
+export const CATEGORY_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
+  'Botol Plastik': { icon: 'water-outline', color: '#0B3B7E', bg: '#DCEEFF' },
+  Kertas: { icon: 'newspaper-outline', color: '#764609', bg: '#FBEED6' },
+  Kaleng: { icon: 'beer-outline', color: '#8C2416', bg: '#FDE3DF' },
+  'Botol Kaca': { icon: 'wine-outline', color: '#45560C', bg: '#ECF3D5' },
 };
 
 export const totalKg = (items: { estimated_weight: number; actual_weight: number | null }[]) =>

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 import { colors, radius, shadow, spacing } from './theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
 type ToastTone = 'success' | 'error' | 'info';
@@ -71,12 +72,12 @@ export function ToastHost() {
         style={styles.toast}
       >
         <View style={[styles.accent, { backgroundColor: t.color }]} />
-        <Ionicons name={t.icon} size={22} color={t.color} />
+        <Icon name={t.icon} size={22} color={t.color} />
         <View style={styles.body}>
           <Text variant="subheading" numberOfLines={1}>{current.title}</Text>
           {current.message && <Text variant="bodySmall" tone="muted" numberOfLines={2}>{current.message}</Text>}
         </View>
-        <Ionicons name="close" size={18} color={colors.textSubtle} />
+        <Icon name="close" size={18} color={colors.textSubtle} />
       </Pressable>
     </Animated.View>
   );

@@ -1,17 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import api, { getErrorCode, getErrorMessage } from '../services/api';
 import { refreshMe } from '../services/user';
 import {
-  AppBar, Button, Card, Chip, Dialog, Divider, EmptyState, IconButton, Input, Screen, Skeleton, Text,
-  colors, radius, spacing, toast,
-} from '../ui';
-import { CATEGORY_META } from '../lib/status';
+  AppBar, Button, Card, CategoryTile, Chip, Dialog, Divider, EmptyState, IconButton, Input, Screen, Skeleton, Text,
+  categoryStyle, colors, fonts, radius, spacing, toast, Icon } from '../ui';
 import { formatNumber } from '../lib/format';
 import type { PickupOrder, VerificationSummary } from '../lib/types';
 
@@ -155,26 +152,27 @@ export default function ScanScreen() {
       <Screen scroll={false}>
         <View style={styles.success}>
           <View style={styles.successIcon}>
-            <Ionicons name="checkmark" size={48} color={colors.onPrimary} />
+            <Icon name="checkmark" size={36} color={colors.success} />
           </View>
-          <Text variant="title" align="center">Setoran berhasil!</Text>
+          <Text variant="title" align="center" style={styles.successTitle}>Setoran berhasil</Text>
           <Text tone="muted" align="center" style={styles.successMsg}>
             Terima kasih telah memilah sampah. Poin sudah masuk ke saldo Anda.
           </Text>
-          <Text variant="display" tone="primary" align="center" style={styles.successPoints}>
-            +{formatNumber(result.points_earned)}
-          </Text>
-          <Text variant="caption" tone="subtle" align="center">POIN DITERIMA</Text>
-          <Card style={styles.successStats}>
-            <Stat icon="scale-outline" label="Berat" value={`${formatNumber(result.total_kg, 2)} kg`} />
-            <View style={styles.statDivider} />
-            <Stat icon="leaf-outline" label="CO₂ dicegah" value={`${formatNumber(result.co2, 2)} kg`} />
-            <View style={styles.statDivider} />
-            <Stat icon="wallet-outline" label="Saldo" value={formatNumber(result.balance)} />
+          <Card style={styles.successCard}>
+            <Text variant="bodySmall" tone="muted">Poin diterima</Text>
+            <Text variant="display" tone="success" tabular style={styles.successPoints}>
+              +{formatNumber(result.points_earned)}
+            </Text>
+            <Divider style={styles.successRule} />
+            <View style={styles.stats}>
+              <Stat label="Berat" value={`${formatNumber(result.total_kg, 2)} kg`} />
+              <Stat label="CO₂ dicegah" value={`${formatNumber(result.co2, 2)} kg`} />
+              <Stat label="Saldo baru" value={formatNumber(result.balance)} />
+            </View>
           </Card>
         </View>
         <View style={styles.successActions}>
-          <Button title="Donasikan poin" icon="heart" size="lg" onPress={() => router.replace('/(tabs)/katalog')} />
+          <Button title="Donasikan poin" icon="heart-outline" size="lg" onPress={() => router.replace('/(tabs)/katalog')} />
           <Button title="Lihat detail penjemputan" variant="ghost"
             onPress={() => router.replace(`/pickup/${orderId}`)} />
         </View>
@@ -189,16 +187,16 @@ export default function ScanScreen() {
           onBack={backToScan} />}
         footer={summary ? (
           <View style={styles.footerRow}>
-            <Button title="Tolak" variant="outline" icon="close" onPress={() => setRejectOpen(true)}
-              disabled={loading} style={styles.flex} />
-            <Button title="Setujui" icon="checkmark" onPress={approve} loading={loading} style={styles.flex2} />
+            <Button title="Tolak" variant="secondary" icon="close-outline" onPress={() => setRejectOpen(true)}
+              disabled={loading} style={styles.rejectBtn} />
+            <Button title="Setujui" icon="checkmark" onPress={approve} loading={loading} style={styles.flex} />
           </View>
         ) : undefined}
       >
         {summary ? <ReviewBody summary={summary} /> : (
           <>
-            <Skeleton height={140} radius={radius.lg} />
-            <Skeleton height={200} radius={radius.lg} style={{ marginTop: spacing.md }} />
+            <Skeleton height={140} radius={radius.card} />
+            <Skeleton height={200} radius={radius.card} style={{ marginTop: spacing.lg }} />
           </>
         )}
       </Screen>
@@ -241,22 +239,25 @@ export default function ScanScreen() {
 function ReviewBody({ summary }: { summary: VerificationSummary }) {
   const seconds = useCountdown(summary.expires_at);
   const expired = seconds === 0;
+  const totalEstimate = summary.items.reduce((s, i) => s + i.estimated_weight, 0);
 
   return (
     <>
       <Card style={styles.totalCard}>
-        <Text variant="overline" style={styles.totalLabel}>Total poin untuk Anda</Text>
-        <Text variant="display" style={styles.totalPoints}>{formatNumber(summary.total_points)}</Text>
-        <View style={styles.totalMeta}>
-          <Text variant="bodySmall" style={styles.totalSub}>{formatNumber(summary.total_kg, 2)} kg sampah</Text>
-          <Text variant="bodySmall" style={styles.totalSub}>• {formatNumber(summary.co2, 2)} kg CO₂ dicegah</Text>
+        <Text variant="bodySmall" tone="muted">Poin yang akan Anda terima</Text>
+        <View style={styles.totalRow}>
+          <Text variant="display" tone="success" tabular>+{formatNumber(summary.total_points)}</Text>
+          <Text tone="muted">poin</Text>
         </View>
+        <Text variant="bodySmall" tone="muted" tabular>
+          {formatNumber(summary.total_kg, 2)} kg sampah · {formatNumber(summary.co2, 2)} kg CO₂ dicegah
+        </Text>
       </Card>
 
       {seconds != null && (
         <View style={[styles.timer, expired && styles.timerExpired]}>
-          <Ionicons name="time-outline" size={16} color={expired ? colors.danger : colors.warning} />
-          <Text variant="bodySmall" weight="600" style={{ color: expired ? colors.danger : colors.warning }}>
+          <Icon name="time-outline" size={18} color={expired ? colors.danger : colors.warning} />
+          <Text variant="bodySmall" weight="500" tabular style={[styles.flex, { color: expired ? colors.danger : colors.warning }]}>
             {expired
               ? 'Kode sudah kedaluwarsa. Minta kurir membuat kode baru.'
               : `Kode berlaku ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} lagi`}
@@ -264,40 +265,41 @@ function ReviewBody({ summary }: { summary: VerificationSummary }) {
         </View>
       )}
 
-      <Card style={styles.block} padded={false}>
-        <View style={styles.blockHead}>
-          <Text variant="subheading">Rincian timbangan</Text>
-          {summary.courier_name && <Text variant="caption" tone="subtle">oleh {summary.courier_name}</Text>}
+      <Card style={styles.receipt}>
+        <View style={styles.receiptHead}>
+          <Text variant="heading">Rincian timbangan</Text>
+          {summary.courier_name && <Text variant="caption" tone="muted" numberOfLines={1}>oleh {summary.courier_name}</Text>}
         </View>
-        {summary.items.map((item, i) => {
-          const meta = CATEGORY_META[item.category];
-          const diff = item.actual_weight != null ? item.actual_weight - item.estimated_weight : 0;
-          return (
-            <View key={item.id}>
-              {i > 0 && <Divider style={styles.inset} />}
-              <View style={styles.item}>
-                <View style={[styles.itemIcon, { backgroundColor: (meta?.color || colors.primary) + '18' }]}>
-                  <Ionicons name={meta?.icon || 'cube'} size={18} color={meta?.color || colors.primary} />
-                </View>
-                <View style={styles.flex}>
-                  <Text variant="subheading">{item.category}</Text>
-                  <Text variant="caption" tone="subtle">
-                    Estimasi {formatNumber(item.estimated_weight, 1)} kg
-                    {diff !== 0 ? ` (${diff > 0 ? '+' : ''}${formatNumber(diff, 2)})` : ''}
-                  </Text>
-                </View>
-                <View style={styles.right}>
-                  <Text variant="subheading">{formatNumber(item.actual_weight ?? 0, 2)} kg</Text>
-                  <Text variant="caption" tone="primary">+{formatNumber(item.points)} poin</Text>
-                </View>
-              </View>
+
+        <View style={[styles.tr, styles.thead]}>
+          <Text variant="caption" tone="muted" style={styles.flex}>Kategori</Text>
+          <Text variant="caption" tone="muted" style={styles.num}>Estimasi</Text>
+          <Text variant="caption" tone="muted" style={styles.num}>Aktual</Text>
+          <Text variant="caption" tone="muted" style={styles.num}>Poin</Text>
+        </View>
+
+        {summary.items.map((item, i) => (
+          <View key={item.id} style={[styles.tr, styles.trow, i > 0 && styles.trowRule]}>
+            <View style={styles.cellCat}>
+              <CategoryTile name={item.category} size={32} />
+              <Text variant="bodySmall" numberOfLines={1} style={styles.flex}>{categoryStyle(item.category).short}</Text>
             </View>
-          );
-        })}
+            <Text variant="bodySmall" tone="muted" tabular style={styles.num}>{formatNumber(item.estimated_weight, 1)} kg</Text>
+            <Text variant="bodySmall" weight="600" tabular style={styles.num}>{formatNumber(item.actual_weight ?? 0, 2)} kg</Text>
+            <Text variant="bodySmall" tone="success" tabular style={styles.num}>+{formatNumber(item.points)}</Text>
+          </View>
+        ))}
+
+        <View style={[styles.tr, styles.ttotal]}>
+          <Text variant="bodySmall" weight="600" style={styles.flex}>Total</Text>
+          <Text variant="bodySmall" tone="muted" tabular style={styles.num}>{formatNumber(totalEstimate, 1)} kg</Text>
+          <Text variant="bodySmall" weight="600" tabular style={styles.num}>{formatNumber(summary.total_kg, 2)} kg</Text>
+          <Text variant="bodySmall" weight="600" tone="success" tabular style={styles.num}>+{formatNumber(summary.total_points)}</Text>
+        </View>
       </Card>
 
       <View style={styles.note}>
-        <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+        <Icon name="information-circle-outline" size={18} color={colors.textMuted} />
         <Text variant="bodySmall" tone="muted" style={styles.flex}>
           Periksa berat bersama kurir. Tekan Setujui bila sudah sesuai, atau Tolak agar kurir menimbang ulang.
         </Text>
@@ -373,7 +375,7 @@ function ScannerView({ busy, onScanned, onManual }: {
       <View style={styles.frameWrap} pointerEvents="none">
         <View style={styles.frame}>
           <View style={[styles.corner, styles.tl]} />
-          <View style={[styles.corner, styles.tr]} />
+          <View style={[styles.corner, styles.tr_]} />
           <View style={[styles.corner, styles.bl]} />
           <View style={[styles.corner, styles.br]} />
         </View>
@@ -383,7 +385,11 @@ function ScannerView({ busy, onScanned, onManual }: {
       </View>
 
       <View style={[styles.cameraBottom, { paddingBottom: insets.bottom + spacing.xl }]}>
-        <Button title="Masukkan kode manual" variant="outline" icon="keypad-outline" onPress={onManual} />
+        <Pressable accessibilityRole="button" onPress={onManual}
+          style={({ pressed }) => [styles.manualBtn, pressed && styles.manualBtnPressed]}>
+          <Icon name="keypad-outline" size={18} color="#FFFFFF" />
+          <Text variant="subheading" tone="inverse">Masukkan kode manual</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -425,7 +431,7 @@ function ManualEntry({ orderId, onOrderChange, error, loading, onBack, onSubmit 
     body = <EmptyState icon="alert-circle-outline" title="Tidak dapat memuat" message={loadError}
       actionLabel="Coba lagi" onAction={loadPending} />;
   } else if (orderId == null && pending === null) {
-    body = <Skeleton height={120} radius={radius.lg} />;
+    body = <Skeleton height={120} radius={radius.card} />;
   } else if (orderId == null && pending?.length === 0) {
     body = <EmptyState icon="hourglass-outline" title="Belum ada yang perlu disetujui"
       message="Kode verifikasi muncul setelah kurir selesai menimbang sampah Anda." />;
@@ -434,7 +440,7 @@ function ManualEntry({ orderId, onOrderChange, error, loading, onBack, onSubmit 
       <>
         {pending && pending.length > 1 && (
           <View style={styles.block}>
-            <Text variant="bodySmall" weight="600" style={styles.label}>Pilih penjemputan</Text>
+            <Text variant="bodySmall" weight="500" style={styles.label}>Pilih penjemputan</Text>
             <View style={styles.chips}>
               {pending.map((p) => (
                 <Chip key={p.id} label={`#${p.id}`} selected={orderId === p.id} onPress={() => onOrderChange(p.id)} />
@@ -442,8 +448,8 @@ function ManualEntry({ orderId, onOrderChange, error, loading, onBack, onSubmit 
             </View>
           </View>
         )}
-        <Card style={styles.block}>
-          <Text variant="subheading">Kode verifikasi</Text>
+        <Card style={[styles.block, styles.manualCard]}>
+          <Text variant="heading">Kode verifikasi</Text>
           <Text variant="bodySmall" tone="muted" style={styles.manualHint}>
             Masukkan {CODE_LENGTH} karakter yang tampil di bawah QR pada HP kurir.
           </Text>
@@ -478,49 +484,53 @@ function ManualEntry({ orderId, onOrderChange, error, loading, onBack, onSubmit 
   );
 }
 
-function Stat({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
-      <Ionicons name={icon} size={18} color={colors.primary} />
-      <Text variant="subheading" style={styles.statValue}>{value}</Text>
-      <Text variant="caption" tone="subtle">{label}</Text>
+      <Text variant="bodySmall" weight="600" tabular numberOfLines={1}>{value}</Text>
+      <Text variant="caption" tone="muted" numberOfLines={1}>{label}</Text>
     </View>
   );
 }
 
 const CORNER = 28;
 const FRAME = 240;
+const NUM_COL = 58;
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  flex2: { flex: 2 },
   footerRow: { flexDirection: 'row', gap: spacing.md },
+  rejectBtn: { width: 110 },
   block: { marginTop: spacing.md },
   label: { marginBottom: spacing.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  manualHint: { marginTop: spacing.xs, marginBottom: spacing.md },
-  codeInput: { fontSize: 24, letterSpacing: 8, fontWeight: '700', textAlign: 'center' },
+  manualCard: { padding: spacing.xl },
+  manualHint: { marginTop: spacing.xs, marginBottom: spacing.lg },
+  codeInput: { fontSize: 24, letterSpacing: 8, fontFamily: fonts.bold, textAlign: 'center' },
   reason: { alignSelf: 'stretch', marginTop: spacing.lg },
 
-  totalCard: { backgroundColor: colors.primary, borderColor: colors.primary, alignItems: 'center', paddingVertical: spacing.xxl },
-  totalLabel: { color: 'rgba(255,255,255,0.8)' },
-  totalPoints: { color: colors.onPrimary, fontSize: 44, lineHeight: 52, marginTop: spacing.xs },
-  totalMeta: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs, flexWrap: 'wrap', justifyContent: 'center' },
-  totalSub: { color: 'rgba(255,255,255,0.85)' },
+  totalCard: { padding: spacing.xl },
+  totalRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.xs },
   timer: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md,
-    padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.warningSoft,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg,
+    paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md, borderRadius: 14, backgroundColor: colors.warningSoft,
   },
   timerExpired: { backgroundColor: colors.dangerSoft },
-  blockHead: {
-    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xs,
+  receipt: { marginTop: spacing.lg, padding: spacing.lg },
+  receiptHead: {
+    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.md, marginBottom: spacing.md,
   },
-  item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  itemIcon: { width: 36, height: 36, borderRadius: radius.sm + 2, alignItems: 'center', justifyContent: 'center' },
-  inset: { marginLeft: spacing.lg + 36 + spacing.md },
-  right: { alignItems: 'flex-end' },
-  note: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, paddingHorizontal: spacing.xs },
+  tr: { flexDirection: 'row', alignItems: 'center' },
+  thead: { paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.rule },
+  trow: { paddingVertical: spacing.md },
+  trowRule: { borderTopWidth: 1, borderTopColor: colors.rule },
+  ttotal: { paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderStrong },
+  cellCat: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm + 2, minWidth: 0 },
+  num: { width: NUM_COL, textAlign: 'right' },
+  note: {
+    flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, padding: spacing.md + 2,
+    borderRadius: 14, backgroundColor: colors.surfaceAlt,
+  },
 
   camera: { flex: 1, backgroundColor: '#000' },
   cameraTop: {
@@ -532,21 +542,27 @@ const styles = StyleSheet.create({
   frameHint: { marginTop: spacing.xxl, paddingHorizontal: spacing.xxxl },
   corner: { position: 'absolute', width: CORNER, height: CORNER, borderColor: '#FFFFFF' },
   tl: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: radius.md },
-  tr: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: radius.md },
+  tr_: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: radius.md },
   bl: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: radius.md },
   br: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: radius.md },
-  cameraBottom: { position: 'absolute', left: spacing.lg, right: spacing.lg, bottom: 0 },
+  cameraBottom: { position: 'absolute', left: spacing.xxl, right: spacing.xxl, bottom: 0 },
+  manualBtn: {
+    height: 52, borderRadius: radius.pill, borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.12)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+  },
+  manualBtnPressed: { backgroundColor: 'rgba(255,255,255,0.24)' },
 
   success: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   successIcon: {
-    width: 88, height: 88, borderRadius: 44, backgroundColor: colors.primary,
+    width: 72, height: 72, borderRadius: 36, backgroundColor: colors.successSoft,
     alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xl,
   },
-  successMsg: { marginTop: spacing.xs, maxWidth: 300 },
-  successPoints: { marginTop: spacing.xxl, fontSize: 48, lineHeight: 56 },
-  successStats: { flexDirection: 'row', alignSelf: 'stretch', marginTop: spacing.xxl },
-  stat: { flex: 1, alignItems: 'center', gap: spacing.xxs },
-  statValue: { marginTop: spacing.xs },
-  statDivider: { width: 1, backgroundColor: colors.border },
+  successTitle: { fontSize: 28, lineHeight: 34 },
+  successMsg: { marginTop: spacing.sm, maxWidth: 300 },
+  successCard: { alignSelf: 'stretch', marginTop: spacing.xxl, padding: spacing.xl },
+  successPoints: { marginTop: spacing.xs },
+  successRule: { marginVertical: spacing.lg },
+  stats: { flexDirection: 'row', gap: spacing.md },
+  stat: { flex: 1, gap: 2 },
   successActions: { gap: spacing.sm, paddingBottom: spacing.xl },
 });

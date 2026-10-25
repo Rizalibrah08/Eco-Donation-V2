@@ -1,12 +1,11 @@
 import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconButton, colors, spacing } from '../ui';
+import { IconButton, colors, spacing, Icon } from '../ui';
 
 // Gambar sampul penuh dengan tombol kembali melayang (dipakai di detail kampanye).
+// Pita gelap datar di atas menjaga ikon status bar tetap terbaca di atas foto terang.
 export function HeroHeader({ imageUrl, height = 260 }: { imageUrl: string | null; height?: number }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -16,12 +15,12 @@ export function HeroHeader({ imageUrl, height = 260 }: { imageUrl: string | null
         <Image source={{ uri: imageUrl }} style={StyleSheet.absoluteFill} />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.placeholder]}>
-          <Ionicons name="earth" size={56} color={colors.primary} />
+          <Icon name="image-outline" size={48} color={colors.textSubtle} />
         </View>
       )}
-      <LinearGradient colors={['rgba(0,0,0,0.45)', 'transparent']} style={styles.shade} />
+      <View style={[styles.band, { height: Math.max(96, insets.top + 64) }]} />
       <View style={[styles.bar, { top: insets.top + spacing.sm }]}>
-        <IconButton icon="chevron-back" accessibilityLabel="Kembali"
+        <IconButton icon="chevron-back" accessibilityLabel="Kembali" size={40}
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/katalog'))} />
       </View>
     </View>
@@ -29,7 +28,7 @@ export function HeroHeader({ imageUrl, height = 260 }: { imageUrl: string | null
 }
 
 const styles = StyleSheet.create({
-  placeholder: { backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  shade: { position: 'absolute', left: 0, right: 0, top: 0, height: 120 },
+  placeholder: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  band: { position: 'absolute', left: 0, right: 0, top: 0, backgroundColor: 'rgba(0,0,0,0.28)' },
   bar: { position: 'absolute', left: spacing.lg },
 });

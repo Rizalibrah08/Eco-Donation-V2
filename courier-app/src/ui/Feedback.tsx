@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View, StyleProp, ViewStyle, DimensionValue } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { StyleSheet, View, StyleProp, ViewStyle, DimensionValue } from 'react-native';
+import type { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from './theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 import { Button } from './Button';
 
@@ -19,7 +20,7 @@ export function EmptyState({ icon, title, message, actionLabel, onAction, style 
   return (
     <View style={[styles.empty, style]}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={30} color={colors.primary} />
+        <Icon name={icon} size={28} color={colors.textMuted} />
       </View>
       <Text variant="heading" align="center">{title}</Text>
       {message && <Text variant="bodySmall" tone="muted" align="center" style={styles.emptyMsg}>{message}</Text>}
@@ -38,19 +39,9 @@ interface SkeletonProps {
   style?: StyleProp<ViewStyle>;
 }
 
+// Batang abu-abu datar seukuran nilai aslinya; tanpa shimmer agar tata letak tidak bergeser.
 export function Skeleton({ width = '100%', height = 16, radius: r = radius.sm, style }: SkeletonProps) {
-  const opacity = useRef(new Animated.Value(0.5)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.5, duration: 700, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity]);
-  return <Animated.View style={[{ width, height, borderRadius: r, backgroundColor: colors.border, opacity }, style]} />;
+  return <View style={[{ width, height, borderRadius: r, backgroundColor: colors.surfaceAlt }, style]} />;
 }
 
 export function SkeletonCard({ lines = 3 }: { lines?: number }) {
@@ -96,7 +87,7 @@ export function Avatar({ name, size = 44, color = colors.primary }: { name?: str
     .join('');
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color + '1F', alignItems: 'center', justifyContent: 'center' }}>
-      <Text weight="800" style={{ color, fontSize: size * 0.38 }}>{initials}</Text>
+      <Text weight="600" style={{ color, fontSize: size * 0.36, lineHeight: size * 0.5 }}>{initials}</Text>
     </View>
   );
 }
@@ -111,7 +102,7 @@ export function SectionHeader({ title, action, onAction, style }: { title: strin
     <View style={[styles.section, style]}>
       <Text variant="heading">{title}</Text>
       {action && onAction && (
-        <Text variant="bodySmall" tone="primary" weight="700" onPress={onAction} accessibilityRole="button" suppressHighlighting>
+        <Text variant="bodySmall" tone="primary" weight="600" onPress={onAction} accessibilityRole="button" suppressHighlighting>
           {action}
         </Text>
       )}
@@ -125,7 +116,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
@@ -133,13 +124,13 @@ const styles = StyleSheet.create({
   emptyMsg: { marginTop: spacing.xs, maxWidth: 300 },
   skeletonCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
-  divider: { height: 1, backgroundColor: colors.border },
+  divider: { height: 1, backgroundColor: colors.rule },
   section: {
     flexDirection: 'row',
     alignItems: 'center',

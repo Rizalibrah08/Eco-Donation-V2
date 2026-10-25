@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, spacing } from './theme';
+import type { Ionicons } from '@expo/vector-icons';
+import { colors, spacing } from './theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
 interface ListRowProps {
@@ -15,7 +16,7 @@ interface ListRowProps {
   danger?: boolean;
 }
 
-export function ListRow({ icon, iconColor = colors.primary, title, subtitle, value, onPress, chevron = !!onPress, danger }: ListRowProps) {
+export function ListRow({ icon, iconColor = colors.textMuted, title, subtitle, value, onPress, chevron = !!onPress, danger }: ListRowProps) {
   const color = danger ? colors.danger : iconColor;
   return (
     <Pressable
@@ -25,16 +26,14 @@ export function ListRow({ icon, iconColor = colors.primary, title, subtitle, val
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
       {icon && (
-        <View style={[styles.icon, { backgroundColor: color + '17' }]}>
-          <Ionicons name={icon} size={20} color={color} />
-        </View>
+        <Icon name={icon} size={20} color={color} />
       )}
       <View style={styles.body}>
-        <Text variant="subheading" tone={danger ? 'danger' : 'default'}>{title}</Text>
+        <Text variant="body" tone={danger ? 'danger' : 'default'}>{title}</Text>
         {subtitle && <Text variant="bodySmall" tone="muted">{subtitle}</Text>}
       </View>
       {value && <Text variant="bodySmall" tone="muted">{value}</Text>}
-      {chevron && <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />}
+      {chevron && <Icon name="chevron-forward" size={18} color={colors.textSubtle} />}
     </Pressable>
   );
 }
@@ -49,6 +48,5 @@ const styles = StyleSheet.create({
     minHeight: 56,
   },
   pressed: { backgroundColor: colors.surfaceAlt },
-  icon: { width: 38, height: 38, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1 },
 });

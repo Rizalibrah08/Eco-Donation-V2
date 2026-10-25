@@ -1,17 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
 import { refreshMe } from '../../services/user';
 import { useAuthStore } from '../../store/auth';
 import {
-  Avatar, Card, Dialog, Divider, ListRow, ProgressBar, Screen, SectionHeader, Text, colors, radius, spacing,
-} from '../../ui';
-import { formatNumber, formatRupiah } from '../../lib/format';
-import { CATEGORY_META } from '../../lib/status';
+  Avatar, Card, Dialog, Divider, IconButton, ListRow, ProgressBar, Screen, SectionHeader, Text, category, colors, radius, spacing, Icon } from '../../ui';
+import { formatNumber } from '../../lib/format';
 import type { Badge, BadgeTier } from '../../lib/types';
 
 const TIER: Record<BadgeTier, { label: string; color: string }> = {
@@ -21,150 +17,135 @@ const TIER: Record<BadgeTier, { label: string; color: string }> = {
 };
 
 const BADGE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
-  leaf: 'leaf', refresh: 'sync', heart: 'heart', trophy: 'trophy',
+  leaf: 'leaf-outline', refresh: 'sync-outline', heart: 'heart-outline', trophy: 'trophy-outline',
 };
+
+// Warna identitas pucat per orang di papan peringkat (bukan data), berurutan agar stabil.
+const PERSON_TINTS = [category.plastik, category.kaleng, category.kertas, category.kaca];
 
 interface Leaderboard {
   entries: { rank: number; id: number; name: string; points: number }[];
   me: { rank: number; points: number } | null;
 }
 
+function badgeProgressText(b: Badge) {
+  if (!b.tier && b.next_tier) return `${formatNumber(b.value, 1)} dari ${formatNumber(b.next_target)} ${b.unit} untuk membuka`;
+  if (b.next_tier) return `${formatNumber(b.value, 1)} dari ${formatNumber(b.next_target)} ${b.unit} menuju ${TIER[b.next_tier].label}`;
+  return `${formatNumber(b.value, 1)} ${b.unit} · tingkat tertinggi`;
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
-  const [distribution, setDistribution] = useState<{ category: string; total_weight: number }[]>([]);
   const [badge, setBadge] = useState<Badge | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const [lb, dist] = await Promise.allSettled([
+    const [lb] = await Promise.allSettled([
       api.get<Leaderboard>('/leaderboard', { params: { limit: 5 } }),
-      api.get('/users/me/distribution'),
       refreshMe(),
     ]);
     if (lb.status === 'fulfilled') setLeaderboard(lb.value.data);
-    if (dist.status === 'fulfilled') setDistribution(dist.value.data);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const totalDist = distribution.reduce((s, d) => s + d.total_weight, 0);
+  const badges = user?.badges || [];
+  const earned = badges.filter((b) => b.tier);
 
   return (
     <>
-      <Screen padded={false} edgeToEdge statusBar="light" refreshing={refreshing}
-        onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}>
-        <LinearGradient colors={colors.primaryGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={[styles.header, { paddingTop: insets.top + spacing.xl }]}>
-          <View style={styles.avatarRing}>
-            <Avatar name={user?.name} size={72} color="#FFFFFF" />
-          </View>
-          <Text variant="title" tone="inverse" style={styles.name}>{user?.name}</Text>
-          <Text variant="bodySmall" style={styles.email}>{user?.email}</Text>
-          <View style={styles.headerStats}>
-            <HeaderStat value={formatNumber(user?.total_setor_count)} label="Setoran" />
-            <View style={styles.headerDivider} />
-            <HeaderStat value={formatNumber(user?.total_donasi_count)} label="Donasi" />
-            <View style={styles.headerDivider} />
-            <HeaderStat value={leaderboard?.me ? `#${leaderboard.me.rank}` : '-'} label="Peringkat" />
-          </View>
-        </LinearGradient>
+      <Screen refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}>
+        <View style={styles.header}>
+          <Text variant="title">Profil</Text>
+          <IconButton icon="settings-outline" size={44} accessibilityLabel="Edit profil" onPress={() => router.push('/settings')} />
+        </View>
 
-        <View style={styles.content}>
-          <SectionHeader title="Portofolio dampak" />
-          <View style={styles.impactGrid}>
-            <ImpactTile icon="trash-bin" color={colors.primary} value={`${formatNumber(user?.total_kg, 1)} kg`} label="Sampah didaur ulang" />
-            <ImpactTile icon="cloud" color={colors.info} value={`${formatNumber(user?.total_co2, 1)} kg`} label="Emisi CO₂ dicegah" />
-            <ImpactTile icon="heart" color="#E11D48" value={formatRupiah(user?.total_donations_rp)} label="Donasi tersalurkan" />
+        <Card style={styles.identity} padded={false}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Edit profil" onPress={() => router.push('/settings')}
+            style={({ pressed }) => [styles.identityRow, pressed && { backgroundColor: colors.surfaceAlt }]}>
+            <Avatar name={user?.name} size={56} color={colors.primary} />
+            <View style={styles.flex}>
+              <Text variant="heading" numberOfLines={1}>{user?.name}</Text>
+              <Text variant="bodySmall" tone="muted" numberOfLines={1}>{user?.email}</Text>
+            </View>
+            <Icon name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+          <Divider style={styles.inset} />
+          <View style={styles.stats}>
+            <Stat value={formatNumber(user?.total_setor_count)} label="Setoran" />
+            <View style={styles.vRule} />
+            <Stat value={formatNumber(user?.total_donasi_count)} label="Donasi" />
+            <View style={styles.vRule} />
+            <Stat value={leaderboard?.me ? `#${leaderboard.me.rank}` : '—'} label="Peringkat" />
           </View>
+        </Card>
 
-          {distribution.length > 0 && (
-            <Card style={styles.block}>
-              <Text variant="subheading">Komposisi sampah</Text>
-              <View style={styles.stack}>
-                {distribution.map((d) => (
-                  <View key={d.category} style={{ flex: d.total_weight, backgroundColor: CATEGORY_META[d.category]?.color || colors.primary }} />
-                ))}
-              </View>
-              {distribution.map((d) => (
-                <View key={d.category} style={styles.legend}>
-                  <View style={[styles.legendDot, { backgroundColor: CATEGORY_META[d.category]?.color || colors.primary }]} />
-                  <Text variant="bodySmall" style={styles.flex}>{d.category}</Text>
-                  <Text variant="bodySmall" tone="muted">{formatNumber(d.total_weight, 1)} kg</Text>
-                  <Text variant="bodySmall" weight="700" style={styles.pct}>{Math.round((d.total_weight / totalDist) * 100)}%</Text>
-                </View>
-              ))}
-            </Card>
-          )}
-
-          <SectionHeader title="Lencana" style={styles.sectionGap} />
-          <View style={styles.badges}>
-            {(user?.badges || []).map((b) => (
-              <Pressable key={b.key} accessibilityRole="button" accessibilityLabel={`Lencana ${b.name}`}
-                style={styles.badge} onPress={() => setBadge(b)}>
-                <View style={[styles.badgeIcon, { backgroundColor: b.tier ? TIER[b.tier].color + '22' : colors.surfaceAlt, borderColor: b.tier ? TIER[b.tier].color : colors.border }]}>
-                  <Ionicons name={BADGE_ICON[b.icon] || 'ribbon'} size={24} color={b.tier ? TIER[b.tier].color : colors.textSubtle} />
-                </View>
-                <Text variant="caption" weight="700" align="center" numberOfLines={1}>{b.name}</Text>
-                <Text variant="caption" tone="subtle" align="center">{b.tier ? TIER[b.tier].label : 'Terkunci'}</Text>
-                <ProgressBar value={b.progress} height={4} color={b.tier ? TIER[b.tier].color : colors.primary} style={styles.badgeBar} />
-              </Pressable>
-            ))}
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Text variant="heading">Lencana</Text>
+            <Text variant="bodySmall" tone="muted">{earned.length} dari {badges.length} diraih</Text>
           </View>
-
-          <SectionHeader title="Papan peringkat" style={styles.sectionGap} />
           <Card padded={false}>
+            {badges.map((b, i) => (
+              <View key={b.key}>
+                {i > 0 && <Divider style={styles.inset} />}
+                <Pressable accessibilityRole="button" accessibilityLabel={`Lencana ${b.name}`} onPress={() => setBadge(b)}
+                  style={({ pressed }) => [styles.badgeRow, pressed && { backgroundColor: colors.surfaceAlt }]}>
+                  <View style={[styles.medal, { borderColor: b.tier ? TIER[b.tier].color : colors.borderStrong }]}>
+                    <Icon name={BADGE_ICON[b.icon] || 'ribbon-outline'} size={20} color={b.tier ? colors.text : colors.textMuted} />
+                  </View>
+                  <View style={styles.flex}>
+                    <View style={styles.badgeTitle}>
+                      <Text variant="subheading" tone={b.tier ? 'default' : 'muted'} numberOfLines={1} style={styles.flex}>{b.name}</Text>
+                      <View style={styles.tierChip}>
+                        <Text variant="caption">{b.tier ? TIER[b.tier].label : 'Terkunci'}</Text>
+                      </View>
+                    </View>
+                    <ProgressBar value={b.progress} height={4} color={colors.text} style={styles.badgeBar} />
+                    <Text variant="caption" tone="muted">{badgeProgressText(b)}</Text>
+                  </View>
+                </Pressable>
+              </View>
+            ))}
+          </Card>
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader title="Papan peringkat" />
+          <Card padded={false} style={styles.board}>
             {(leaderboard?.entries || []).map((e, i) => {
               const me = e.id === user?.id;
-              return (
-                <View key={e.id}>
-                  {i > 0 && <Divider />}
-                  <View style={[styles.rank, me && styles.rankMe]}>
-                    <View style={[styles.rankNo, e.rank <= 3 && { backgroundColor: [colors.gold, colors.silver, colors.bronze][e.rank - 1] }]}>
-                      <Text variant="caption" weight="800" style={{ color: e.rank <= 3 ? '#FFFFFF' : colors.textMuted }}>{e.rank}</Text>
-                    </View>
-                    <Avatar name={e.name} size={34} />
-                    <Text variant="subheading" style={styles.flex} numberOfLines={1}>{e.name}{me ? ' (Anda)' : ''}</Text>
-                    <Text variant="bodySmall" weight="700">{formatNumber(e.points)}</Text>
-                  </View>
-                </View>
-              );
+              return <RankRow key={e.id} rank={e.rank} name={me ? `${e.name} (Anda)` : e.name} points={e.points} me={me} tint={i} />;
             })}
             {leaderboard?.me && !leaderboard.entries.some((e) => e.id === user?.id) && (
-              <>
-                <Divider />
-                <View style={[styles.rank, styles.rankMe]}>
-                  <View style={styles.rankNo}><Text variant="caption" weight="800" tone="muted">{leaderboard.me.rank}</Text></View>
-                  <Avatar name={user?.name} size={34} />
-                  <Text variant="subheading" style={styles.flex}>Anda</Text>
-                  <Text variant="bodySmall" weight="700">{formatNumber(leaderboard.me.points)}</Text>
-                </View>
-              </>
+              <RankRow rank={leaderboard.me.rank} name="Anda" points={leaderboard.me.points} me tint={0} />
             )}
           </Card>
+        </View>
 
-          <SectionHeader title="Akun" style={styles.sectionGap} />
+        <View style={styles.section}>
+          <SectionHeader title="Akun" />
           <Card padded={false}>
-            <ListRow icon="person-outline" title="Edit profil & kata sandi" onPress={() => router.push('/settings')} />
-            <Divider />
+            <ListRow icon="create-outline" title="Edit profil & kata sandi" onPress={() => router.push('/settings')} />
+            <Divider style={styles.inset} />
             <ListRow icon="notifications-outline" title="Notifikasi" onPress={() => router.push('/notifications')} />
-            <Divider />
+            <Divider style={styles.inset} />
             <ListRow icon="help-circle-outline" title="Pusat bantuan" onPress={() => router.push('/help')} />
-            <Divider />
+            <Divider style={styles.inset} />
             <ListRow icon="log-out-outline" title="Keluar" danger onPress={() => setConfirmLogout(true)} />
           </Card>
-          <Text variant="caption" tone="subtle" align="center" style={styles.version}>Eco-Donation v1.0.0</Text>
+          <Text variant="caption" tone="muted" align="center" style={styles.version}>Eco-Donation v1.0.0</Text>
         </View>
       </Screen>
 
       <Dialog
         visible={!!badge}
         tone="primary"
-        icon={badge ? BADGE_ICON[badge.icon] || 'ribbon' : 'ribbon'}
+        icon={badge ? BADGE_ICON[badge.icon] || 'ribbon-outline' : 'ribbon-outline'}
         title={badge?.name || ''}
         message={badge?.description}
         confirmLabel="Tutup"
@@ -173,18 +154,18 @@ export default function ProfileScreen() {
         {badge && (
           <View style={styles.badgeDetail}>
             <Text variant="bodySmall" tone="muted" align="center">
-              Pencapaian Anda: <Text variant="bodySmall" weight="700">{formatNumber(badge.value, 1)} {badge.unit}</Text>
+              Pencapaian Anda: <Text variant="bodySmall" weight="600">{formatNumber(badge.value, 1)} {badge.unit}</Text>
             </Text>
             {badge.next_tier ? (
               <>
-                <ProgressBar value={badge.progress} style={{ marginTop: spacing.md }} color={TIER[badge.next_tier].color} />
-                <Text variant="caption" tone="subtle" align="center" style={{ marginTop: spacing.sm }}>
+                <ProgressBar value={badge.progress} style={{ marginTop: spacing.md }} color={colors.text} />
+                <Text variant="caption" tone="muted" align="center" style={{ marginTop: spacing.sm }}>
                   {formatNumber(badge.next_target)} {badge.unit} untuk tingkat {TIER[badge.next_tier].label}
                 </Text>
               </>
             ) : (
-              <Text variant="caption" tone="success" weight="700" align="center" style={{ marginTop: spacing.sm }}>
-                Tingkat tertinggi tercapai!
+              <Text variant="caption" tone="success" weight="600" align="center" style={{ marginTop: spacing.sm }}>
+                Tingkat tertinggi tercapai
               </Text>
             )}
           </View>
@@ -194,7 +175,7 @@ export default function ProfileScreen() {
       <Dialog
         visible={confirmLogout}
         tone="danger"
-        icon="log-out"
+        icon="log-out-outline"
         title="Keluar dari akun?"
         message="Anda perlu masuk kembali untuk menyetor sampah dan berdonasi."
         cancelLabel="Batal"
@@ -207,66 +188,53 @@ export default function ProfileScreen() {
   );
 }
 
-function HeaderStat({ value, label }: { value: string; label: string }) {
+function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <View style={styles.headerStat}>
-      <Text variant="heading" tone="inverse">{value}</Text>
-      <Text variant="caption" style={styles.email}>{label}</Text>
+    <View style={styles.stat}>
+      <Text variant="heading" tabular style={styles.statValue}>{value}</Text>
+      <Text variant="caption" tone="muted">{label}</Text>
     </View>
   );
 }
 
-function ImpactTile({ icon, color, value, label }: { icon: keyof typeof Ionicons.glyphMap; color: string; value: string; label: string }) {
+function RankRow({ rank, name, points, me, tint }: { rank: number; name: string; points: number; me: boolean; tint: number }) {
+  const t = me ? { bg: colors.primarySoft, ink: colors.primary } : PERSON_TINTS[(tint - 1 + PERSON_TINTS.length) % PERSON_TINTS.length];
+  const initials = name.replace(' (Anda)', '').split(' ').filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
   return (
-    <Card style={styles.tile}>
-      <View style={[styles.tileIcon, { backgroundColor: color + '17' }]}>
-        <Ionicons name={icon} size={18} color={color} />
+    <View style={[styles.rank, me && styles.rankMe]}>
+      <Text variant="subheading" tone="muted" tabular style={styles.rankNo}>{rank}</Text>
+      <View style={[styles.rankAvatar, { backgroundColor: me ? colors.surface : t.bg }]}>
+        <Text variant="caption" weight="600" style={{ color: t.ink }}>{initials}</Text>
       </View>
-      <Text variant="subheading" numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-      <Text variant="caption" tone="subtle">{label}</Text>
-    </Card>
+      <Text variant="subheading" style={styles.flex} numberOfLines={1}>{name}</Text>
+      <Text variant="subheading" tabular>{formatNumber(points)}</Text>
+      <Text variant="caption" tone="muted">poin</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  header: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
-  avatarRing: { padding: 4, borderRadius: 44, backgroundColor: 'rgba(255,255,255,0.18)' },
-  name: { marginTop: spacing.md },
-  email: { color: 'rgba(255,255,255,0.8)' },
-  headerStats: {
-    flexDirection: 'row',
-    alignSelf: 'stretch',
-    marginTop: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  headerStat: { flex: 1, alignItems: 'center' },
-  headerDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
-  content: { padding: spacing.lg },
-  impactGrid: { flexDirection: 'row', gap: spacing.sm },
-  tile: { flex: 1, padding: spacing.md, gap: 4 },
-  tileIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  block: { marginTop: spacing.md },
-  stack: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', marginVertical: spacing.md, gap: 2 },
-  legend: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs + 2 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  pct: { width: 40, textAlign: 'right' },
-  sectionGap: { marginTop: spacing.xxl },
-  badges: { flexDirection: 'row', justifyContent: 'space-between' },
-  badge: { width: '23%', alignItems: 'center' },
-  badgeIcon: {
-    width: 56, height: 56, borderRadius: 28, borderWidth: 2,
-    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm,
-  },
-  badgeBar: { alignSelf: 'stretch', marginTop: spacing.xs + 2 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xl },
+  identity: { overflow: 'hidden' },
+  identityRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: spacing.xl },
+  inset: { marginHorizontal: spacing.lg },
+  stats: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.lg },
+  stat: { flex: 1, alignItems: 'center', gap: 2 },
+  statValue: { fontSize: 20, lineHeight: 26 },
+  vRule: { width: 1, height: 36, backgroundColor: colors.rule },
+  section: { marginTop: spacing.xxl },
+  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 14 },
+  medal: { width: 44, height: 44, borderRadius: 22, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center' },
+  badgeTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  tierChip: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt },
+  badgeBar: { marginTop: 6, marginBottom: 6 },
   badgeDetail: { alignSelf: 'stretch', marginTop: spacing.lg },
-  rank: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  board: { padding: spacing.sm },
+  rank: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, paddingVertical: 10, borderRadius: radius.md },
   rankMe: { backgroundColor: colors.primarySoft },
-  rankNo: {
-    width: 26, height: 26, borderRadius: 13, backgroundColor: colors.surfaceAlt,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  rankNo: { width: 20, textAlign: 'center' },
+  rankAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   version: { marginTop: spacing.xl },
 });

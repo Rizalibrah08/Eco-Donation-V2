@@ -1,17 +1,18 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, ViewProps, StyleProp, ViewStyle } from 'react-native';
-import { colors, radius, shadow, spacing } from './theme';
+import { colors, radius, spacing } from './theme';
 
 interface CardProps extends ViewProps {
   onPress?: () => void;
   padded?: boolean;
+  /** Dipertahankan agar pemanggil lama tetap valid; kartu tidak lagi memakai bayangan. */
   elevated?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 }
 
-export function Card({ onPress, padded = true, elevated = false, style, children, accessibilityLabel, ...rest }: CardProps) {
-  const base = [styles.card, padded && styles.padded, elevated ? shadow.md : shadow.sm, style];
+export function Card({ onPress, padded = true, elevated: _elevated, style, children, accessibilityLabel, ...rest }: CardProps) {
+  const base = [styles.card, padded && styles.padded, style];
   if (onPress) {
     return (
       <Pressable
@@ -34,10 +35,10 @@ export function Card({ onPress, padded = true, elevated = false, style, children
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
   },
   padded: { padding: spacing.lg },
-  pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+  pressed: { backgroundColor: colors.surfaceAlt },
 });

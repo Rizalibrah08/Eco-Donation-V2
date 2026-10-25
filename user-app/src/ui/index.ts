@@ -13,3 +13,5 @@ export * from './Feedback';
 export * from './Dialog';
 export * from './Toast';
 export * from './ListRow';
+export * from './Category';
+export * from './Icon';

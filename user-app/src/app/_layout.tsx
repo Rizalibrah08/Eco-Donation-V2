@@ -1,6 +1,14 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import {
+  useFonts,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { useAuthStore } from '../store/auth';
 import { useNotificationStore } from '../store/notifications';
 import { connectSocket, disconnectSocket, subscribe } from '../services/socket';
@@ -12,6 +20,13 @@ export default function RootLayout() {
   const hydrated = useAuthStore((s) => s.hydrated);
   const segments = useSegments();
   const router = useRouter();
+  const [fontsLoaded, fontError] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
 
   // Koneksi realtime selama sesi aktif.
   useEffect(() => {
@@ -46,7 +61,8 @@ export default function RootLayout() {
     else if (token && inAuth) router.replace('/(tabs)');
   }, [token, hydrated, segments, router]);
 
-  if (!hydrated) {
+  // Gagal memuat font tidak memblokir aplikasi; teks jatuh ke font sistem.
+  if (!hydrated || (!fontsLoaded && !fontError)) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
         <ActivityIndicator size="large" color={colors.primary} />

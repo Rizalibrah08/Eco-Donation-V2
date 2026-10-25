@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import api, { getErrorMessage } from '../services/api';
 import { searchAddress, reverseGeocode, GeocodingResult } from '../services/geocodingService';
@@ -9,9 +8,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import { useRates } from '../hooks/useRates';
 import { LeafletMap, MapHandle, LatLng } from '../components/LeafletMap';
 import {
-  AppBar, Button, Card, Chip, Dialog, Input, Screen, Text, colors, radius, spacing, toast,
-} from '../ui';
-import { CATEGORY_META } from '../lib/status';
+  AppBar, Button, Card, CategoryTile, Dialog, Input, Screen, Text, categoryStyle, colors, fonts, radius, spacing, toast, Icon } from '../ui';
 import { formatDayLabel, formatNumber } from '../lib/format';
 
 const STEP = 0.5;
@@ -164,34 +161,37 @@ export default function SetorScreen() {
   return (
     <>
       <Screen
-        header={<AppBar title="Setor Sampah" subtitle="Penjemputan gratis ke lokasi Anda" />}
+        header={<AppBar title="Setor sampah" subtitle="Penjemputan gratis ke lokasi Anda" />}
         footer={
           <View style={styles.footer}>
             <View style={styles.flex}>
-              <Text variant="caption" tone="subtle">Estimasi ({formatNumber(totalKg, 1)} kg)</Text>
-              <Text variant="heading" tone="primary">+{formatNumber(estimate)} poin</Text>
+              <Text variant="caption" tone="muted" tabular>Estimasi {formatNumber(totalKg, 1)} kg</Text>
+              <Text variant="heading" tone="success" tabular>+{formatNumber(estimate)} poin</Text>
             </View>
-            <Button title="Lanjutkan" iconRight="arrow-forward" onPress={review} />
+            <Button title="Lanjutkan" onPress={review} style={styles.footerBtn} />
           </View>
         }
       >
-        {/* 1. Jenis sampah */}
-        <StepTitle n={1} title="Jenis sampah" subtitle="Pilih satu atau beberapa kategori." />
+        {/* Jenis sampah */}
+        <SectionTitle title="Jenis sampah" subtitle="Pilih satu atau beberapa kategori." first />
         <View style={styles.grid}>
           {Object.keys(rates).map((c) => {
-            const meta = CATEGORY_META[c] || { icon: 'cube' as const, color: colors.primary };
+            const cat = categoryStyle(c);
             const active = weights[c] !== undefined;
             return (
               <Pressable key={c} accessibilityRole="checkbox" accessibilityState={{ checked: active }}
                 onPress={() => toggle(c)}
-                style={[styles.cat, active && { borderColor: meta.color, backgroundColor: meta.color + '0F' }]}>
-                <View style={[styles.catIcon, { backgroundColor: meta.color + '1A' }]}>
-                  <Ionicons name={meta.icon} size={22} color={meta.color} />
-                </View>
-                <Text variant="subheading">{c}</Text>
-                <Text variant="caption" tone="subtle">{formatNumber(rates[c])} poin/kg</Text>
-                <View style={[styles.check, active && { backgroundColor: meta.color, borderColor: meta.color }]}>
-                  {active && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                style={({ pressed }) => [
+                  styles.cat,
+                  active ? { backgroundColor: cat.bg, borderColor: cat.ink, borderWidth: 1.5 } : pressed && styles.pressed,
+                ]}>
+                <Icon name={cat.icon} size={22} color={cat.ink} />
+                <Text variant="subheading" style={[styles.catName, active && { color: cat.ink }]} numberOfLines={1}>{c}</Text>
+                <Text variant="caption" tabular style={{ color: active ? cat.ink : colors.textMuted }}>
+                  {formatNumber(rates[c])} poin/kg
+                </Text>
+                <View style={[styles.check, active && { backgroundColor: cat.ink, borderColor: cat.ink }]}>
+                  {active && <Icon name="checkmark" size={14} color="#FFFFFF" />}
                 </View>
               </Pressable>
             );
@@ -201,30 +201,30 @@ export default function SetorScreen() {
 
         {selected.length > 0 && (
           <Card style={styles.weights}>
-            <Text variant="bodySmall" weight="700" tone="muted" style={styles.weightsTitle}>Perkiraan berat</Text>
             {selected.map(([c, w]) => (
               <View key={c} style={styles.weightRow}>
-                <Text variant="subheading" style={styles.flex}>{c}</Text>
+                <CategoryTile name={c} size={32} />
+                <Text variant="body" style={styles.flex} numberOfLines={1}>{c}</Text>
                 <Stepper value={w} onChange={(v) => setWeight(c, v)} />
               </View>
             ))}
-            <Text variant="caption" tone="subtle">Berat final ditimbang kurir di lokasi dan Anda setujui sebelum poin masuk.</Text>
+            <Text variant="caption" tone="muted">Berat final ditimbang kurir di lokasi dan Anda setujui sebelum poin masuk.</Text>
           </Card>
         )}
 
-        {/* 2. Lokasi */}
-        <StepTitle n={2} title="Lokasi penjemputan" subtitle="Geser peta hingga pin tepat di lokasi Anda." />
+        {/* Lokasi */}
+        <SectionTitle title="Lokasi penjemputan" subtitle="Geser peta hingga pin tepat di lokasi Anda." />
         <View style={styles.searchWrap}>
-          <Input icon="search" placeholder="Cari alamat atau tempat" value={query} onChangeText={setQuery} autoCorrect={false} />
+          <Input icon="search-outline" placeholder="Cari alamat atau tempat" value={query} onChangeText={setQuery} autoCorrect={false} />
           {suggestions.length > 0 && (
-            <Card padded={false} elevated style={styles.suggestions}>
+            <Card padded={false} style={styles.suggestions}>
               {suggestions.map((s, i) => (
                 <Pressable key={`${s.lat}-${s.lon}-${i}`} onPress={() => pickSuggestion(s)}
-                  style={({ pressed }) => [styles.suggestion, i > 0 && styles.suggestionBorder, pressed && { backgroundColor: colors.surfaceAlt }]}>
-                  <Ionicons name="location-outline" size={18} color={colors.textSubtle} />
+                  style={({ pressed }) => [styles.suggestion, i > 0 && styles.suggestionBorder, pressed && styles.pressed]}>
+                  <Icon name="location-outline" size={18} color={colors.textMuted} />
                   <View style={styles.flex}>
                     <Text variant="bodySmall" weight="600" numberOfLines={1}>{s.name}</Text>
-                    <Text variant="caption" tone="subtle" numberOfLines={1}>{s.address}</Text>
+                    <Text variant="caption" tone="muted" numberOfLines={1}>{s.address}</Text>
                   </View>
                 </Pressable>
               ))}
@@ -234,13 +234,14 @@ export default function SetorScreen() {
         <View style={styles.mapWrap}>
           <LeafletMap ref={mapRef} center={DEFAULT_POS} zoom={15} picker style={styles.map}
             onMove={(p) => { setPos(p); setAddressTouched(false); }} />
-          <Pressable accessibilityRole="button" accessibilityLabel="Gunakan lokasi saya" onPress={() => locateMe()} style={styles.gps}>
-            <Ionicons name={locating ? 'hourglass-outline' : 'locate'} size={20} color={colors.primary} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Gunakan lokasi saya" onPress={() => locateMe()}
+            style={({ pressed }) => [styles.gps, pressed && styles.pressed]}>
+            <Icon name={locating ? 'hourglass-outline' : 'locate-outline'} size={20} color={colors.text} />
           </Pressable>
         </View>
         <Input
           label="Alamat lengkap"
-          icon="home-outline"
+          icon="location-outline"
           value={address}
           onChangeText={(t) => { setAddress(t); setAddressTouched(true); }}
           placeholder="Nama jalan, nomor rumah, RT/RW"
@@ -250,7 +251,6 @@ export default function SetorScreen() {
         />
         <Input
           label="Patokan (opsional)"
-          icon="flag-outline"
           value={note}
           onChangeText={setNote}
           placeholder="Contoh: pagar hijau, depan masjid"
@@ -258,22 +258,34 @@ export default function SetorScreen() {
           containerStyle={styles.field}
         />
 
-        {/* 3. Jadwal */}
-        <StepTitle n={3} title="Jadwal penjemputan" subtitle="Senin–Sabtu, pukul 08.00–18.00." />
+        {/* Jadwal */}
+        <SectionTitle title="Jadwal penjemputan" subtitle="Senin–Sabtu, pukul 08.00–18.00." />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days}>
-          {days.map((d, i) => (
-            <Pressable key={d.toISOString()} accessibilityRole="button" accessibilityState={{ selected: day === i }}
-              onPress={() => setDay(i)} style={[styles.day, day === i && styles.daySelected]}>
-              <Text variant="caption" weight="600" style={{ color: day === i ? colors.onPrimary : colors.textMuted }}>{formatDayLabel(d)}</Text>
-              <Text variant="title" style={{ color: day === i ? colors.onPrimary : colors.text }}>{d.getDate()}</Text>
-            </Pressable>
-          ))}
+          {days.map((d, i) => {
+            const on = day === i;
+            return (
+              <Pressable key={d.toISOString()} accessibilityRole="button" accessibilityState={{ selected: on }}
+                onPress={() => setDay(i)} style={[styles.day, on && styles.daySelected]}>
+                <Text variant="caption" style={{ color: on ? colors.onPrimary : colors.textMuted }}>{formatDayLabel(d)}</Text>
+                <Text variant="heading" tabular style={[styles.dayNo, { color: on ? colors.onPrimary : colors.text }]}>{d.getDate()}</Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
         <View style={styles.slots}>
-          {SLOTS.map((h) => (
-            <Chip key={h} label={`${String(h).padStart(2, '0')}.00`} selected={slot === h}
-              disabled={isSlotPast(days[day], h)} onPress={() => setSlot(h)} />
-          ))}
+          {SLOTS.map((h) => {
+            const on = slot === h;
+            const past = isSlotPast(days[day], h);
+            return (
+              <Pressable key={h} accessibilityRole="button" accessibilityState={{ selected: on, disabled: past }}
+                disabled={past} onPress={() => setSlot(h)}
+                style={({ pressed }) => [styles.slot, on && styles.slotSelected, pressed && !on && styles.pressed, past && styles.slotPast]}>
+                <Text variant="bodySmall" weight={on ? '600' : '400'} tabular style={{ color: on ? colors.primary : colors.text }}>
+                  {`${String(h).padStart(2, '0')}.00`}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
         {showErrors && errors.slot && <Text variant="caption" tone="danger" style={styles.err}>{errors.slot}</Text>}
       </Screen>
@@ -281,7 +293,7 @@ export default function SetorScreen() {
       <Dialog
         visible={confirm}
         tone="primary"
-        icon="bicycle"
+        icon="bicycle-outline"
         title="Konfirmasi penjemputan"
         cancelLabel="Ubah"
         confirmLabel="Ajukan"
@@ -295,21 +307,18 @@ export default function SetorScreen() {
           ))}
           <SummaryRow label="Jadwal" value={`${formatDayLabel(days[day])}, ${days[day].getDate()} • ${String(slot ?? 0).padStart(2, '0')}.00`} />
           <SummaryRow label="Estimasi poin" value={`+${formatNumber(estimate)}`} strong />
-          <Text variant="caption" tone="subtle" numberOfLines={2} style={{ marginTop: spacing.sm }}>{address}</Text>
+          <Text variant="caption" tone="muted" numberOfLines={2} style={{ marginTop: spacing.sm }}>{address}</Text>
         </View>
       </Dialog>
     </>
   );
 }
 
-function StepTitle({ n, title, subtitle }: { n: number; title: string; subtitle: string }) {
+function SectionTitle({ title, subtitle, first }: { title: string; subtitle: string; first?: boolean }) {
   return (
-    <View style={styles.step}>
-      <View style={styles.stepNo}><Text variant="caption" weight="800" style={{ color: colors.onPrimary }}>{n}</Text></View>
-      <View style={styles.flex}>
-        <Text variant="heading">{title}</Text>
-        <Text variant="bodySmall" tone="muted">{subtitle}</Text>
-      </View>
+    <View style={[styles.section, first && styles.sectionFirst]}>
+      <Text variant="heading">{title}</Text>
+      <Text variant="bodySmall" tone="muted">{subtitle}</Text>
     </View>
   );
 }
@@ -320,23 +329,25 @@ function Stepper({ value, onChange }: { value: number; onChange: (v: number) => 
   return (
     <View style={styles.stepper}>
       <Pressable accessibilityLabel="Kurangi berat" onPress={() => onChange(value - STEP)} style={styles.stepBtn} hitSlop={6}>
-        <Ionicons name="remove" size={18} color={colors.text} />
+        <Icon name="remove" size={18} color={colors.text} />
       </Pressable>
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        onEndEditing={() => {
-          const n = parseFloat(text.replace(',', '.'));
-          if (Number.isFinite(n) && n > 0) onChange(n);
-          else setText(String(value).replace('.', ','));
-        }}
-        keyboardType="decimal-pad"
-        style={styles.stepInput}
-        accessibilityLabel="Berat dalam kilogram"
-      />
-      <Text variant="caption" tone="subtle">kg</Text>
+      <View style={styles.stepValue}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          onEndEditing={() => {
+            const n = parseFloat(text.replace(',', '.'));
+            if (Number.isFinite(n) && n > 0) onChange(n);
+            else setText(String(value).replace('.', ','));
+          }}
+          keyboardType="decimal-pad"
+          style={styles.stepInput}
+          accessibilityLabel="Berat dalam kilogram"
+        />
+        <Text variant="caption" tone="muted">kg</Text>
+      </View>
       <Pressable accessibilityLabel="Tambah berat" onPress={() => onChange(value + STEP)} style={styles.stepBtn} hitSlop={6}>
-        <Ionicons name="add" size={18} color={colors.text} />
+        <Icon name="add" size={18} color={colors.text} />
       </Pressable>
     </View>
   );
@@ -346,63 +357,70 @@ function SummaryRow({ label, value, strong }: { label: string; value: string; st
   return (
     <View style={styles.summaryRow}>
       <Text variant="bodySmall" tone="muted">{label}</Text>
-      <Text variant="bodySmall" weight={strong ? '800' : '600'} tone={strong ? 'primary' : 'default'}>{value}</Text>
+      <Text variant="bodySmall" weight="600" tone={strong ? 'success' : 'default'} tabular>{value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  pressed: { backgroundColor: colors.surfaceAlt },
   footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
-  step: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', marginTop: spacing.xl, marginBottom: spacing.md },
-  stepNo: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  footerBtn: { minWidth: 140 },
+  section: { marginTop: spacing.xxl, marginBottom: spacing.md, gap: 2 },
+  sectionFirst: { marginTop: spacing.sm },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.md },
   cat: {
-    width: '47.8%',
+    width: '48.2%',
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.md + 2,
-    gap: 2,
+    padding: spacing.lg,
   },
-  catIcon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
+  catName: { marginTop: spacing.md },
   check: {
     position: 'absolute', top: spacing.md, right: spacing.md, width: 22, height: 22, borderRadius: 11,
     borderWidth: 1.5, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center',
   },
   err: { marginTop: spacing.sm },
-  weights: { marginTop: spacing.md, gap: spacing.md },
-  weightsTitle: { textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 11 },
-  weightRow: { flexDirection: 'row', alignItems: 'center' },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2 },
-  stepBtn: {
-    width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface,
+  weights: { marginTop: spacing.lg, gap: spacing.md },
+  weightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  stepper: {
+    flexDirection: 'row', alignItems: 'center', height: 40, borderRadius: radius.pill,
+    borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface, paddingHorizontal: spacing.xs,
   },
+  stepBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  stepValue: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minWidth: 60, gap: 2 },
   stepInput: {
-    minWidth: 52, height: 36, textAlign: 'center', fontSize: 16, fontWeight: '700', color: colors.text,
-    borderRadius: radius.sm, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing.xs,
+    minWidth: 28, paddingVertical: 0, paddingHorizontal: 0, textAlign: 'right',
+    fontSize: 15, fontFamily: fonts.semibold, color: colors.text, fontVariant: ['tabular-nums'],
   },
   searchWrap: { zIndex: 10, marginBottom: spacing.md },
-  suggestions: { position: 'absolute', top: 56, left: 0, right: 0, zIndex: 20 },
+  suggestions: { position: 'absolute', top: 56, left: 0, right: 0, zIndex: 20, overflow: 'hidden' },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
-  suggestionBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  suggestionBorder: { borderTopWidth: 1, borderTopColor: colors.rule },
   mapWrap: { borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
-  map: { height: 230 },
+  map: { height: 220 },
   gps: {
-    position: 'absolute', right: spacing.md, bottom: spacing.md, width: 42, height: 42, borderRadius: 21,
-    backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+    position: 'absolute', right: spacing.md, bottom: spacing.md, width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
   },
-  field: { marginTop: spacing.md },
+  field: { marginTop: spacing.lg },
   days: { gap: spacing.sm, paddingBottom: spacing.xs },
   day: {
-    width: 64, paddingVertical: spacing.md, borderRadius: radius.md, alignItems: 'center',
+    width: 60, paddingVertical: spacing.sm + 2, borderRadius: 14, alignItems: 'center',
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
   daySelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  dayNo: { marginTop: 2, fontSize: 18, lineHeight: 24 },
   slots: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
-  summary: { alignSelf: 'stretch', marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  slot: {
+    width: '22.8%', height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+  },
+  slotSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary, borderWidth: 1.5 },
+  slotPast: { opacity: 0.4 },
+  summary: { alignSelf: 'stretch', marginTop: spacing.lg, padding: spacing.md, borderRadius: 14, backgroundColor: colors.surfaceAlt },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
 });

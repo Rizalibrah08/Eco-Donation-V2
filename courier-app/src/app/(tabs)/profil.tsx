@@ -1,16 +1,15 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/auth';
-import { Avatar, Card, Dialog, Divider, ListRow, Screen, Text, colors, spacing } from '../../ui';
+import { Card, Dialog, Divider, ListRow, Screen, Text, colors, fonts, spacing, Icon } from '../../ui';
+import { InitialsAvatar } from '../../components/TaskCard';
 import { formatDate, formatNumber } from '../../lib/format';
 import type { Courier } from '../../lib/types';
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
@@ -30,46 +29,49 @@ export default function ProfileScreen() {
 
   return (
     <>
-      <Screen padded={false} edgeToEdge statusBar="light" refreshing={refreshing}
+      <Screen refreshing={refreshing}
         onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}>
-        <LinearGradient colors={colors.primaryGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={[styles.header, { paddingTop: insets.top + spacing.xl }]}>
-          <View style={styles.avatarRing}>
-            <Avatar name={user?.name} size={72} color="#FFFFFF" />
-          </View>
-          <Text variant="title" tone="inverse" style={styles.name}>{user?.name}</Text>
-          <Text variant="bodySmall" style={styles.sub}>Kurir Eco-Donation</Text>
-        </LinearGradient>
+        <Text variant="title" style={styles.h1}>Profil</Text>
 
-        <View style={styles.content}>
+        <Card style={styles.identity}>
+          <View style={styles.idRow}>
+            <InitialsAvatar name={user?.name} size={56} bg={colors.primarySoft} fg={colors.primary} />
+            <View style={styles.flex}>
+              <Text variant="heading" numberOfLines={1}>{user?.name}</Text>
+              <Text variant="bodySmall" tone="muted">Kurir Eco-Donation</Text>
+            </View>
+          </View>
+          <Divider style={styles.rule} />
           <View style={styles.stats}>
-            <Card style={styles.stat}>
-              <Text variant="title" tone="primary">{formatNumber(user?.completed_count)}</Text>
+            <View style={styles.stat}>
+              <Text style={styles.statValue} tabular>{formatNumber(user?.completed_count)}</Text>
               <Text variant="caption" tone="muted">Penjemputan selesai</Text>
-            </Card>
-            <Card style={styles.stat}>
-              <Text variant="title" tone="primary">{formatNumber(user?.total_kg, 1)} kg</Text>
+            </View>
+            <View style={styles.vrule} />
+            <View style={[styles.stat, styles.statRight]}>
+              <Text style={styles.statValue} tabular>{formatNumber(user?.total_kg, 1)} kg</Text>
               <Text variant="caption" tone="muted">Sampah diangkut</Text>
-            </Card>
+            </View>
           </View>
+        </Card>
 
-          <Card padded={false} style={styles.block}>
-            <ListRow icon="mail-outline" title="Email" subtitle={user?.email} />
-            <Divider />
-            <ListRow icon="call-outline" title="Nomor HP" subtitle={user?.phone || '-'} />
-            {user?.created_at && (
-              <>
-                <Divider />
-                <ListRow icon="calendar-outline" title="Bergabung" subtitle={formatDate(user.created_at)} />
-              </>
-            )}
-          </Card>
+        <Text variant="heading" style={styles.sectionTitle}>Informasi akun</Text>
+        <Card padded={false}>
+          <InfoRow icon="mail-outline" label="Email" value={user?.email || '-'} />
+          <Divider style={styles.inset} />
+          <InfoRow icon="call-outline" label="Nomor HP" value={user?.phone || '-'} />
+          {user?.created_at && (
+            <>
+              <Divider style={styles.inset} />
+              <InfoRow icon="calendar-outline" label="Bergabung" value={formatDate(user.created_at)} />
+            </>
+          )}
+        </Card>
 
-          <Card padded={false} style={styles.block}>
-            <ListRow icon="log-out-outline" title="Keluar" danger onPress={() => setConfirmLogout(true)} />
-          </Card>
-          <Text variant="caption" tone="subtle" align="center" style={styles.version}>Eco-Donation Kurir v1.0.0</Text>
-        </View>
+        <Card padded={false} style={styles.logout}>
+          <ListRow icon="log-out-outline" title="Keluar" danger chevron={false} onPress={() => setConfirmLogout(true)} />
+        </Card>
+        <Text variant="caption" tone="muted" align="center" style={styles.version}>Eco-Donation Kurir v1.0.0</Text>
       </Screen>
 
       <Dialog
@@ -88,14 +90,31 @@ export default function ProfileScreen() {
   );
 }
 
+function InfoRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <Icon name={icon} size={18} color={colors.textMuted} />
+      <Text variant="bodySmall" tone="muted">{label}</Text>
+      <Text variant="bodySmall" weight="600" numberOfLines={1} align="right" style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  header: { alignItems: 'center', paddingBottom: spacing.xxxl + spacing.lg },
-  avatarRing: { padding: 4, borderRadius: 44, backgroundColor: 'rgba(255,255,255,0.18)' },
-  name: { marginTop: spacing.md },
-  sub: { color: 'rgba(255,255,255,0.8)', marginTop: spacing.xxs },
-  content: { paddingHorizontal: spacing.lg, marginTop: -spacing.xxl },
-  stats: { flexDirection: 'row', gap: spacing.md },
-  stat: { flex: 1, alignItems: 'center', gap: spacing.xxs },
-  block: { marginTop: spacing.lg },
+  flex: { flex: 1 },
+  h1: { marginBottom: spacing.xxl },
+  identity: { padding: spacing.xl },
+  idRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  rule: { marginVertical: spacing.lg },
+  stats: { flexDirection: 'row', alignItems: 'stretch' },
+  stat: { flex: 1, gap: spacing.xxs },
+  statRight: { paddingLeft: spacing.lg },
+  statValue: { fontSize: 20, lineHeight: 26, fontFamily: fonts.semibold, color: colors.text },
+  vrule: { width: 1, backgroundColor: colors.rule },
+  sectionTitle: { marginTop: spacing.xxl, marginBottom: spacing.md },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, minHeight: 52 },
+  infoValue: { flex: 1 },
+  inset: { marginLeft: spacing.lg },
+  logout: { marginTop: spacing.lg },
   version: { marginTop: spacing.xl },
 });

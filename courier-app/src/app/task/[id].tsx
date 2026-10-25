@@ -1,17 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, StyleSheet, TextInput, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import api, { getErrorCode, getErrorMessage } from '../../services/api';
 import { useSocketEvent } from '../../services/socket';
 import { useLocationSharing, SharingState } from '../../hooks/useLocationSharing';
 import { LeafletMap, MapMarker } from '../../components/LeafletMap';
+import { InitialsAvatar } from '../../components/TaskCard';
 import {
-  AppBar, Avatar, Button, Card, Dialog, Divider, EmptyState, IconButton, Pill, Screen, Skeleton, Text,
-  colors, radius, spacing, toast,
-} from '../../ui';
-import { CATEGORY_META, STATUS, mapsUrl, totalKg } from '../../lib/status';
+  AppBar, Button, Card, CategoryTile, Dialog, Divider, EmptyState, IconButton, Pill, Screen, Skeleton, Text,
+  colors, fonts, radius, spacing, toast, Icon } from '../../ui';
+import { STATUS, mapsUrl, totalKg } from '../../lib/status';
 import { formatDateTime, formatNumber, formatSchedule } from '../../lib/format';
 import type { PickupOrder, VerificationCode } from '../../lib/types';
 
@@ -60,6 +60,7 @@ export default function TaskDetailScreen() {
   });
 
   const sharing = useLocationSharing(orderId, order?.status === 'on_the_way');
+  const rates = useRates();
 
   const newCode = useCallback(async () => {
     setBusy(true);
@@ -162,15 +163,21 @@ export default function TaskDetailScreen() {
   const showQr = order.status === 'pending_verification' && !reweigh;
   const showMap = order.status === 'waiting' || order.status === 'on_the_way';
   const canRelease = order.status === 'on_the_way' || order.status === 'arrived';
+  const userName = order.user_name || 'Pengguna';
+  const hasActual = order.items.every((i) => i.actual_weight != null);
+  const weighedKg = order.items.reduce((sum, i) => sum + (parseKg(weights[i.id] ?? '') || 0), 0);
+  const weighedPoints = rates
+    ? order.items.reduce((sum, i) => sum + (pointsFor(rates, i.category, parseKg(weights[i.id] ?? '') || 0) ?? 0), 0)
+    : null;
 
   let footer: React.ReactNode;
   if (order.status === 'waiting') {
-    footer = <Button title="Ambil tugas ini" icon="hand-right" size="lg" loading={busy} onPress={accept} />;
+    footer = <Button title="Ambil tugas ini" icon="hand-right-outline" size="lg" loading={busy} onPress={accept} />;
   } else if (order.status === 'on_the_way') {
-    footer = <Button title="Saya sudah tiba" icon="location" size="lg" loading={busy} onPress={arrive} />;
+    footer = <Button title="Saya sudah tiba" icon="location-outline" size="lg" loading={busy} onPress={arrive} />;
   } else if (weighing) {
     footer = (
-      <Button title="Simpan & tampilkan QR" icon="qr-code" size="lg" loading={busy} disabled={invalidWeight}
+      <Button title="Simpan & tampilkan QR" icon="qr-code-outline" size="lg" loading={busy} disabled={invalidWeight}
         onPress={weigh} />
     );
   }
@@ -190,7 +197,7 @@ export default function TaskDetailScreen() {
         footer={footer}
       >
         <View style={styles.statusRow}>
-          <Pill label={s.label} tone={s.tone} dot />
+          <Pill label={s.label} tone={s.tone} />
           {order.status === 'on_the_way' && <SharingBadge state={sharing} />}
         </View>
 
@@ -200,82 +207,142 @@ export default function TaskDetailScreen() {
         )}
 
         {order.status === 'completed' && (
-          <Card style={[styles.block, styles.done]}>
-            <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+          <View style={[styles.block, styles.done]}>
+            <Icon name="checkmark-circle-outline" size={24} color={colors.success} />
             <View style={styles.flex}>
               <Text variant="subheading">Penjemputan selesai</Text>
               <Text variant="bodySmall" tone="muted">
                 Disetujui pengguna{order.completed_at ? ` • ${formatDateTime(order.completed_at)}` : ''}
               </Text>
             </View>
-          </Card>
+          </View>
         )}
 
         {showMap && (
-          <View style={styles.mapWrap}>
+          <Card padded={false} style={[styles.block, styles.mapCard]}>
             <LeafletMap center={{ lat: order.pickup_lat, lng: order.pickup_lng }} markers={markers} zoom={16}
               style={styles.map} interactive />
-          </View>
+          </Card>
+        )}
+
+        {weighing ? (
+          <>
+            <View style={styles.section}>
+              <Text variant="heading">Timbang sampah</Text>
+              <Text variant="bodySmall" tone="muted" style={styles.sectionHint}>
+                Masukkan berat aktual tiap kategori bersama pengguna.
+              </Text>
+            </View>
+            <Card padded={false}>
+              {order.items.map((item, i) => {
+                const kg = parseKg(weights[item.id] ?? '') || 0;
+                const rate = rates?.[item.category];
+                const pts = pointsFor(rates, item.category, kg);
+                return (
+                  <View key={item.id}>
+                    {i > 0 && <Divider />}
+                    <View style={styles.weighRow}>
+                      <View style={styles.itemHead}>
+                        <CategoryTile name={item.category} size={36} />
+                        <View style={styles.flex}>
+                          <Text variant="body" weight="600">{item.category}</Text>
+                          <Text variant="caption" tone="muted" tabular>
+                            Estimasi {formatNumber(item.estimated_weight, 1)} kg
+                            {rate != null ? ` · ${formatNumber(rate)} poin/kg` : ''}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.stepRow}>
+                        <Stepper
+                          value={weights[item.id] ?? ''}
+                          onChange={(v) => setWeights((w) => ({ ...w, [item.id]: v }))}
+                        />
+                        {pts != null && (
+                          <View style={styles.ptsCol}>
+                            <Text variant="heading" tone="success" tabular>+{formatNumber(pts)}</Text>
+                            <Text variant="caption" tone="muted">poin</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </Card>
+
+            <View style={[styles.block, styles.summary]}>
+              <View style={styles.summaryRow}>
+                <Text variant="bodySmall" tone="muted">Total timbangan</Text>
+                <Text variant="heading" tabular>{formatNumber(weighedKg, 2)} kg</Text>
+              </View>
+              {weighedPoints != null && (
+                <View style={[styles.summaryRow, styles.summaryGap]}>
+                  <Text variant="bodySmall" tone="muted" numberOfLines={1} style={styles.flex}>Poin untuk {userName}</Text>
+                  <Text variant="heading" tone="success" tabular>+{formatNumber(weighedPoints)}</Text>
+                </View>
+              )}
+            </View>
+          </>
+        ) : (
+          <Card style={styles.block} padded={false}>
+            <View style={styles.blockHead}>
+              <Text variant="heading">{hasActual ? 'Hasil timbangan' : 'Rincian sampah'}</Text>
+              <Text variant="caption" tone="muted" tabular>
+                {hasActual ? 'Total' : 'Estimasi'} {formatNumber(totalKg(order.items), 1)} kg
+              </Text>
+            </View>
+            {order.items.map((item) => {
+              const pts = item.actual_weight != null ? pointsFor(rates, item.category, item.actual_weight) : null;
+              return (
+                <View key={item.id}>
+                  <Divider style={styles.inset} />
+                  <View style={styles.item}>
+                    <CategoryTile name={item.category} size={36} />
+                    <View style={styles.flex}>
+                      <Text variant="body" weight="600">{item.category}</Text>
+                      <Text variant="caption" tone="muted" tabular>Estimasi {formatNumber(item.estimated_weight, 1)} kg</Text>
+                    </View>
+                    {item.actual_weight != null && (
+                      <View style={styles.itemRight}>
+                        <Text variant="body" weight="600" tabular>{formatNumber(item.actual_weight, 2)} kg</Text>
+                        {pts != null && <Text variant="caption" tone="success" tabular>+{formatNumber(pts)} poin</Text>}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </Card>
         )}
 
         <Card style={styles.block}>
           <View style={styles.person}>
-            <Avatar name={order.user_name} />
+            <InitialsAvatar name={userName} size={44} />
             <View style={styles.flex}>
-              <Text variant="caption" tone="subtle">Pengguna</Text>
-              <Text variant="subheading">{order.user_name || 'Pengguna'}</Text>
+              <Text variant="caption" tone="muted">Pengguna</Text>
+              <Text variant="body" weight="600" numberOfLines={1}>{userName}</Text>
             </View>
             {order.user_phone && order.status !== 'waiting' && order.status !== 'completed' && (
-              <IconButton icon="call" color={colors.primary} accessibilityLabel="Telepon pengguna"
-                onPress={() => Linking.openURL(`tel:${order.user_phone}`)} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Telepon pengguna"
+                hitSlop={6}
+                onPress={() => Linking.openURL(`tel:${order.user_phone}`)}
+                style={({ pressed }) => [styles.call, pressed && styles.callPressed]}
+              >
+                <Icon name="call-outline" size={20} color={colors.primary} />
+              </Pressable>
             )}
           </View>
-          <Divider style={{ marginVertical: spacing.md }} />
+          <Divider style={styles.rule} />
           <View style={styles.addr}>
-            <Ionicons name="location" size={20} color={colors.primary} />
+            <Icon name="location-outline" size={18} color={colors.textMuted} />
             <Text variant="bodySmall" style={styles.flex}>{order.pickup_address}</Text>
           </View>
           {order.status !== 'completed' && order.status !== 'cancelled' && (
-            <Button title="Buka di Google Maps" icon="navigate" variant="secondary" size="sm" style={styles.nav}
+            <Button title="Buka di Google Maps" icon="navigate-outline" variant="secondary" size="sm" style={styles.nav}
               onPress={() => Linking.openURL(mapsUrl(order.pickup_lat, order.pickup_lng))} />
           )}
-        </Card>
-
-        <Card style={styles.block} padded={false}>
-          <View style={styles.blockHead}>
-            <Text variant="subheading">{weighing ? 'Timbang sampah' : 'Rincian sampah'}</Text>
-            <Text variant="caption" tone="subtle">Total {formatNumber(totalKg(order.items), 1)} kg</Text>
-          </View>
-          {weighing && (
-            <Text variant="bodySmall" tone="muted" style={styles.weighHint}>
-              Masukkan berat aktual tiap kategori bersama pengguna.
-            </Text>
-          )}
-          {order.items.map((item, i) => {
-            const meta = CATEGORY_META[item.category];
-            return (
-              <View key={item.id}>
-                {i > 0 && <Divider style={styles.inset} />}
-                <View style={styles.item}>
-                  <View style={[styles.itemIcon, { backgroundColor: (meta?.color || colors.primary) + '18' }]}>
-                    <Ionicons name={meta?.icon || 'cube'} size={18} color={meta?.color || colors.primary} />
-                  </View>
-                  <View style={styles.flex}>
-                    <Text variant="subheading">{item.category}</Text>
-                    <Text variant="caption" tone="subtle">Estimasi {formatNumber(item.estimated_weight, 1)} kg</Text>
-                  </View>
-                  {weighing ? (
-                    <Stepper
-                      value={weights[item.id] ?? ''}
-                      onChange={(v) => setWeights((w) => ({ ...w, [item.id]: v }))}
-                    />
-                  ) : item.actual_weight != null ? (
-                    <Text variant="subheading">{formatNumber(item.actual_weight, 2)} kg</Text>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
         </Card>
       </Screen>
 
@@ -296,6 +363,25 @@ export default function TaskDetailScreen() {
   );
 }
 
+// Poin per kg dibaca dari backend (/config/rates); bila belum termuat, angka poin tidak ditampilkan.
+function useRates() {
+  const [rates, setRates] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api.get<{ rates: Record<string, number> }>('/config/rates')
+      .then(({ data }) => { if (alive && data?.rates) setRates(data.rates); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return rates;
+}
+
+// Sama dengan perhitungan server: pembulatan per item.
+function pointsFor(rates: Record<string, number> | null, category: string, kg: number) {
+  const rate = rates?.[category];
+  return rate == null ? null : Math.round(kg * rate);
+}
+
 function Stepper({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const num = parseKg(value) || 0;
   const step = (delta: number) => {
@@ -304,9 +390,12 @@ function Stepper({ value, onChange }: { value: string; onChange: (v: string) => 
   };
   const invalid = !(num > 0 && num <= MAX_KG);
   return (
-    <View style={styles.stepper}>
-      <IconButton icon="remove" size={34} accessibilityLabel="Kurangi berat" onPress={() => step(-STEP)} />
-      <View style={[styles.stepInput, invalid && styles.stepInvalid]}>
+    <View style={[styles.stepper, invalid && styles.stepInvalid]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Kurangi berat" onPress={() => step(-STEP)}
+        style={({ pressed }) => [styles.stepBtn, pressed && styles.stepBtnPressed]}>
+        <Icon name="remove" size={20} color={colors.text} />
+      </Pressable>
+      <View style={styles.stepValue}>
         <TextInput
           value={value}
           onChangeText={(t) => onChange(t.replace(/[^0-9.,]/g, ''))}
@@ -316,9 +405,12 @@ function Stepper({ value, onChange }: { value: string; onChange: (v: string) => 
           maxLength={6}
           selectTextOnFocus
         />
-        <Text variant="caption" tone="subtle">kg</Text>
+        <Text variant="bodySmall" tone="muted">kg</Text>
       </View>
-      <IconButton icon="add" size={34} accessibilityLabel="Tambah berat" onPress={() => step(STEP)} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Tambah berat" onPress={() => step(STEP)}
+        style={({ pressed }) => [styles.stepBtn, pressed && styles.stepBtnPressed]}>
+        <Icon name="add" size={20} color={colors.text} />
+      </Pressable>
     </View>
   );
 }
@@ -345,7 +437,7 @@ function QrPanel({ verif, busy, onNewCode, onReweigh }: {
   const expired = seconds === 0;
 
   return (
-    <Card style={[styles.block, styles.qrCard]} elevated>
+    <Card style={[styles.block, styles.qrCard]}>
       <Text variant="heading" align="center">Minta pengguna memindai</Text>
       <Text variant="bodySmall" tone="muted" align="center" style={styles.qrLead}>
         Pengguna membuka “Pindai QR” di aplikasinya lalu menyetujui hasil timbangan.
@@ -359,19 +451,24 @@ function QrPanel({ verif, busy, onNewCode, onReweigh }: {
       </View>
       {verif && (
         <>
-          <Text variant="caption" tone="subtle" align="center" style={styles.codeLabel}>KODE MANUAL</Text>
-          <Text style={styles.code} align="center" selectable>{verif.code}</Text>
-          <Text variant="bodySmall" weight="600" align="center" tone={expired ? 'danger' : 'muted'}>
-            {expired
-              ? 'Kode kedaluwarsa'
-              : `Berlaku ${Math.floor((seconds ?? 0) / 60)}:${String((seconds ?? 0) % 60).padStart(2, '0')}`}
-          </Text>
+          <Text variant="caption" tone="muted" align="center" style={styles.codeLabel}>Kode manual</Text>
+          <Text style={styles.code} align="center" selectable tabular>{verif.code}</Text>
+          {expired ? (
+            <Text variant="bodySmall" weight="600" tone="danger" align="center">Kode kedaluwarsa</Text>
+          ) : (
+            <Pill
+              tone="warning"
+              icon="time-outline"
+              label={`Berlaku ${Math.floor((seconds ?? 0) / 60)}:${String((seconds ?? 0) % 60).padStart(2, '0')}`}
+              style={styles.timer}
+            />
+          )}
         </>
       )}
       <View style={styles.qrActions}>
-        <Button title="Timbang ulang" variant="outline" size="sm" icon="scale-outline" onPress={onReweigh}
+        <Button title="Timbang ulang" variant="secondary" size="sm" icon="scale-outline" onPress={onReweigh}
           disabled={busy} style={styles.flex} />
-        <Button title="Buat kode baru" variant={expired ? 'primary' : 'secondary'} size="sm" icon="refresh"
+        <Button title="Buat kode baru" variant={expired ? 'primary' : 'secondary'} size="sm" icon="refresh-outline"
           loading={busy} onPress={onNewCode} style={styles.flex} />
       </View>
     </Card>
@@ -382,9 +479,9 @@ function SharingBadge({ state }: { state: SharingState }) {
   const map: Record<SharingState, { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral'; icon: keyof typeof Ionicons.glyphMap }> = {
     off: { label: 'Lokasi tidak dibagikan', tone: 'neutral', icon: 'navigate-outline' },
     starting: { label: 'Menyiapkan lokasi…', tone: 'neutral', icon: 'navigate-outline' },
-    on: { label: 'Lokasi dibagikan', tone: 'success', icon: 'navigate' },
-    denied: { label: 'Izin lokasi ditolak', tone: 'danger', icon: 'warning' },
-    error: { label: 'Gagal kirim lokasi', tone: 'warning', icon: 'warning' },
+    on: { label: 'Lokasi dibagikan', tone: 'success', icon: 'navigate-outline' },
+    denied: { label: 'Izin lokasi ditolak', tone: 'danger', icon: 'warning-outline' },
+    error: { label: 'Gagal kirim lokasi', tone: 'warning', icon: 'warning-outline' },
   };
   const m = map[state];
   return <Pill label={m.label} tone={m.tone} icon={m.icon} />;
@@ -393,36 +490,62 @@ function SharingBadge({ state }: { state: SharingState }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  block: { marginTop: spacing.md },
-  done: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.successSoft, borderColor: colors.successSoft },
-  mapWrap: { marginTop: spacing.md, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
+  block: { marginTop: spacing.lg },
+  section: { marginTop: spacing.xxl, marginBottom: spacing.md },
+  sectionHint: { marginTop: spacing.xxs },
+  done: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg,
+    borderRadius: radius.card, backgroundColor: colors.successSoft,
+  },
+  mapCard: { borderRadius: radius.lg, overflow: 'hidden' },
   map: { height: 200 },
   person: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  addr: { flexDirection: 'row', gap: spacing.md },
-  nav: { marginTop: spacing.md, alignSelf: 'flex-start' },
+  call: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primarySoft,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  callPressed: { backgroundColor: colors.primarySoftPressed },
+  rule: { marginVertical: spacing.lg },
+  addr: { flexDirection: 'row', gap: spacing.sm },
+  nav: { marginTop: spacing.lg, height: 44 },
   blockHead: {
     flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.lg,
   },
-  weighHint: { paddingHorizontal: spacing.lg },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  itemIcon: { width: 36, height: 36, borderRadius: radius.sm + 2, alignItems: 'center', justifyContent: 'center' },
-  inset: { marginLeft: spacing.lg + 36 + spacing.md },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  stepInput: {
-    flexDirection: 'row', alignItems: 'center', gap: 2, width: 76, height: 38, paddingHorizontal: spacing.sm,
-    borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.sm, backgroundColor: colors.surface,
+  itemRight: { alignItems: 'flex-end' },
+  inset: { marginHorizontal: spacing.lg },
+  weighRow: { padding: spacing.lg, gap: spacing.md },
+  itemHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  ptsCol: { alignItems: 'flex-end' },
+  stepper: {
+    flexDirection: 'row', alignItems: 'stretch', height: 48, borderWidth: 1, borderColor: colors.borderStrong,
+    borderRadius: 14, overflow: 'hidden', backgroundColor: colors.surface,
   },
   stepInvalid: { borderColor: colors.danger },
-  stepText: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.text, textAlign: 'right', padding: 0 },
-  qrCard: { alignItems: 'center' },
+  stepBtn: { width: 48, alignItems: 'center', justifyContent: 'center' },
+  stepBtnPressed: { backgroundColor: colors.surfaceAlt },
+  stepValue: {
+    width: 96, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
+    paddingHorizontal: spacing.sm, backgroundColor: colors.surfaceAlt,
+  },
+  stepText: {
+    minWidth: 36, maxWidth: 60, fontSize: 20, fontFamily: fonts.semibold, color: colors.text,
+    textAlign: 'right', padding: 0, fontVariant: ['tabular-nums'],
+  },
+  summary: { padding: spacing.lg, borderRadius: radius.card, backgroundColor: colors.primarySoft },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  summaryGap: { marginTop: spacing.sm },
+  qrCard: { alignItems: 'center', padding: spacing.xl },
   qrLead: { marginTop: spacing.xs, maxWidth: 280 },
   qrBox: {
-    marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.lg, backgroundColor: '#FFFFFF',
+    marginTop: spacing.xl, padding: spacing.md, borderRadius: radius.lg, backgroundColor: '#FFFFFF',
     borderWidth: 1, borderColor: colors.border,
   },
   qrExpired: { opacity: 0.25 },
-  codeLabel: { marginTop: spacing.lg, letterSpacing: 1 },
-  code: { fontSize: 32, lineHeight: 40, fontWeight: '800', letterSpacing: 6, color: colors.text, marginVertical: spacing.xs },
-  qrActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg, alignSelf: 'stretch' },
+  codeLabel: { marginTop: spacing.lg },
+  code: { fontSize: 32, lineHeight: 40, fontFamily: fonts.extrabold, letterSpacing: 8, color: colors.text, marginVertical: spacing.xs },
+  timer: { alignSelf: 'center' },
+  qrActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl, alignSelf: 'stretch' },
 });

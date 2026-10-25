@@ -3,7 +3,8 @@ import { StyleSheet, View } from 'react-native';
 import api, { getErrorMessage } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import { AuthHero } from '../../components/AuthHero';
-import { Button, Input, Screen, Text, colors, radius, spacing, shadow } from '../../ui';
+import { Ionicons } from '@expo/vector-icons';
+import { Button, Input, Screen, Text, colors, radius, spacing, Icon } from '../../ui';
 
 export default function LoginScreen() {
   const setSession = useAuthStore((s) => s.setSession);
@@ -32,12 +33,10 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen padded={false} edgeToEdge statusBar="light" background={colors.surface}>
+    <Screen contentStyle={styles.content}>
       <AuthHero title="Siap menjemput?" subtitle="Ambil tugas, timbang sampah, dan bantu warga berdonasi." />
-      <View style={styles.sheet}>
-        <Text variant="title">Masuk kurir</Text>
-        <Text tone="muted" style={styles.lead}>Akun kurir dibuat oleh admin Eco-Donation.</Text>
 
+      <View style={styles.form}>
         {error && (
           <View style={styles.alert} accessibilityRole="alert">
             <Text variant="bodySmall" tone="danger" weight="600">{error}</Text>
@@ -72,25 +71,26 @@ export default function LoginScreen() {
 
         <Button title="Masuk" onPress={handleLogin} loading={loading} size="lg" style={styles.cta} />
 
-        <View style={styles.demo}>
-          <Text variant="caption" tone="subtle" align="center">Akun demo: andi@kurir.com • sandi 123456</Text>
+        <View style={styles.note}>
+          <Icon name="shield-checkmark-outline" size={16} color={colors.textMuted} />
+          <Text variant="caption" tone="muted" style={styles.flex}>Akun kurir dibuat oleh admin Eco-Donation.</Text>
         </View>
+      </View>
+
+      <View style={styles.spacer} />
+
+      <View style={styles.demo}>
+        <Icon name="information-circle-outline" size={16} color={colors.textMuted} />
+        <Text variant="caption" tone="muted" style={styles.flex}>Akun demo: andi@kurir.com • sandi 123456</Text>
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    marginTop: -spacing.xxl,
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.xxl,
-    paddingTop: spacing.xxl + spacing.xs,
-    ...shadow.sm,
-  },
-  lead: { marginTop: spacing.xs, marginBottom: spacing.xl },
+  content: { flexGrow: 1 },
+  flex: { flex: 1 },
+  form: { marginTop: spacing.xxxl },
   alert: {
     backgroundColor: colors.dangerSoft,
     borderRadius: radius.md,
@@ -99,5 +99,15 @@ const styles = StyleSheet.create({
   },
   field: { marginBottom: spacing.lg },
   cta: { marginTop: spacing.sm },
-  demo: { marginTop: spacing.xxl, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border },
+  note: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg },
+  spacer: { flex: 1, minHeight: spacing.xxl },
+  demo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
 });

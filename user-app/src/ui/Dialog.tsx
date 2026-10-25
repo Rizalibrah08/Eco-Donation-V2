@@ -1,7 +1,8 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import { colors, radius, shadow, spacing } from './theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 import { Button } from './Button';
 
@@ -51,7 +52,7 @@ export function Dialog({
       <Pressable style={styles.overlay} onPress={loading ? undefined : dismiss} accessibilityLabel="Tutup dialog">
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={[styles.iconWrap, { backgroundColor: t.bg }]}>
-            <Ionicons name={icon || t.icon} size={30} color={t.fg} />
+            <Icon name={icon || t.icon} size={30} color={t.fg} />
           </View>
           <Text variant="title" align="center" style={styles.title}>{title}</Text>
           {message && <Text tone="muted" align="center">{message}</Text>}

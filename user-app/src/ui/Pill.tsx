@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, View, StyleProp, ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from './theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
 export type PillTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
@@ -28,8 +29,8 @@ export function Pill({ label, tone = 'neutral', icon, dot, style }: PillProps) {
   return (
     <View style={[styles.pill, { backgroundColor: t.bg }, style]}>
       {dot && <View style={[styles.dot, { backgroundColor: t.fg }]} />}
-      {icon && <Ionicons name={icon} size={12} color={t.fg} />}
-      <Text variant="caption" weight="700" style={{ color: t.fg }} numberOfLines={1}>
+      {icon && <Icon name={icon} size={12} color={t.fg} />}
+      <Text variant="caption" weight="500" style={{ color: t.fg }} numberOfLines={1}>
         {label}
       </Text>
     </View>

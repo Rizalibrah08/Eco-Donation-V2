@@ -2,14 +2,15 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuthStore } from '../../store/auth';
+import { formatNumber } from '../../lib/format';
 import api, { getErrorMessage } from '../../services/api';
 import { browseNonprofits, searchNonprofits, GlobalNonprofit } from '../../services/everyOrg';
 import { useDebounce } from '../../hooks/useDebounce';
 import { CampaignCard } from '../../components/CampaignCard';
 import { GlobalCard } from '../../components/GlobalCard';
 import {
-  Chip, EmptyState, Input, Segmented, SkeletonCard, Text, colors, spacing,
-} from '../../ui';
+  Chip, EmptyState, Input, Segmented, SkeletonCard, Text, colors, spacing, Icon } from '../../ui';
 import type { Campaign } from '../../lib/types';
 
 const CATEGORIES = ['Semua', 'Pendidikan', 'Lingkungan', 'Bencana Alam', 'Panti Asuhan'];
@@ -21,20 +22,27 @@ export default function KatalogScreen() {
   const [tab, setTab] = useState<Tab>('local');
   const [query, setQuery] = useState('');
   const debounced = useDebounce(query, 400);
+  const points = useAuthStore((s) => s.user?.points);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + spacing.md }]}>
       <View style={styles.header}>
-        <Text variant="title">Salurkan Donasi</Text>
+        <Text variant="title">Donasi</Text>
         <Text variant="bodySmall" tone="muted" style={styles.sub}>Tukarkan poin Anda untuk kampanye sosial pilihan.</Text>
+        <View style={styles.balance}>
+          <Icon name="wallet-outline" size={18} color={colors.primary} />
+          <Text variant="bodySmall" weight="500" tone="primary" style={styles.flex}>Saldo Anda</Text>
+          <Text variant="subheading" tone="primary" tabular>{formatNumber(points)}</Text>
+          <Text variant="bodySmall" tone="primary">poin</Text>
+        </View>
         <Segmented
           value={tab}
           onChange={(v) => { setTab(v); setQuery(''); }}
-          options={[{ value: 'local', label: 'Kampanye Lokal' }, { value: 'global', label: 'Organisasi Global' }]}
+          options={[{ value: 'local', label: 'Kampanye lokal' }, { value: 'global', label: 'Organisasi global' }]}
           style={styles.segment}
         />
         <Input
-          icon="search"
+          icon="search-outline"
           placeholder={tab === 'local' ? 'Cari kampanye atau penyelenggara' : 'Cari organisasi lingkungan (Inggris)'}
           value={query}
           onChangeText={setQuery}
@@ -80,7 +88,9 @@ function LocalList({ search, onOpen }: { search: string; onOpen: (id: number) =>
       onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}
       ListHeaderComponent={
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {CATEGORIES.map((c) => <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />)}
+          {CATEGORIES.map((c) => (
+            <Chip key={c} label={c.charAt(0) + c.slice(1).toLowerCase()} selected={category === c} onPress={() => setCategory(c)} />
+          ))}
         </ScrollView>
       }
       renderItem={({ item }) => <CampaignCard campaign={item} onPress={() => onOpen(item.id)} />}
@@ -152,7 +162,7 @@ function GlobalList({ search, onOpen }: { search: string; onOpen: (id: string) =
       onEndReached={loadMore}
       onEndReachedThreshold={0.4}
       ListHeaderComponent={
-        <Text variant="caption" tone="subtle" style={styles.note}>
+        <Text variant="caption" tone="muted" style={styles.note}>
           Data organisasi dari Every.org. Donasi poin dicatat oleh Eco-Donation dan disalurkan secara berkala.
         </Text>
       }
@@ -173,10 +183,21 @@ function GlobalList({ search, onOpen }: { search: string; onOpen: (id: string) =
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  sub: { marginTop: 2 },
+  flex: { flex: 1 },
+  header: { paddingHorizontal: spacing.xxl, paddingBottom: spacing.lg },
+  sub: { marginTop: spacing.xs },
+  balance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    paddingHorizontal: 14,
+    paddingVertical: spacing.md,
+    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
+  },
   segment: { marginVertical: spacing.lg },
   chips: { gap: spacing.sm, paddingBottom: spacing.lg },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl },
+  list: { paddingHorizontal: spacing.xxl, paddingBottom: spacing.xxxl },
   note: { marginBottom: spacing.md },
 });

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from './theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
 interface ChipProps {
@@ -27,8 +28,8 @@ export function Chip({ label, selected, onPress, icon, disabled }: ChipProps) {
         disabled && styles.disabled,
       ]}
     >
-      {icon && <Ionicons name={icon} size={16} color={fg} />}
-      <Text variant="bodySmall" weight="600" style={{ color: fg }}>{label}</Text>
+      {icon && <Icon name={icon} size={16} color={fg} />}
+      <Text variant="bodySmall" weight="500" style={{ color: fg }}>{label}</Text>
     </Pressable>
   );
 }
@@ -38,13 +39,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs + 2,
-    height: 36,
+    height: 38,
     paddingHorizontal: spacing.md + 2,
     borderRadius: radius.pill,
     borderWidth: 1,
   },
   idle: { backgroundColor: colors.surface, borderColor: colors.border },
-  selected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  selected: { backgroundColor: colors.text, borderColor: colors.text },
   pressed: { backgroundColor: colors.surfaceAlt },
   disabled: { opacity: 0.4 },
 });

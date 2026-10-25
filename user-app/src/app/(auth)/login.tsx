@@ -3,11 +3,14 @@ import { StyleSheet, View } from 'react-native';
 import { Link } from 'expo-router';
 import api, { getErrorMessage } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
-import { AuthHero } from '../../components/AuthHero';
-import { Button, Input, Screen, Text, colors, radius, spacing, shadow } from '../../ui';
+import { useRates } from '../../hooks/useRates';
+import { formatNumber } from '../../lib/format';
+import { AuthHero, authStyles } from '../../components/AuthHero';
+import { Button, Input, Screen, Text, categoryStyle, colors, radius, spacing, Icon } from '../../ui';
 
 export default function LoginScreen() {
   const setSession = useAuthStore((s) => s.setSession);
+  const { rates } = useRates();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,80 +36,94 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen padded={false} edgeToEdge statusBar="light" background={colors.surface}>
+    <Screen contentStyle={styles.content}>
       <AuthHero title="Selamat datang kembali" subtitle="Ubah sampah menjadi kebaikan untuk sesama." />
-      <View style={styles.sheet}>
-        <Text variant="title">Masuk</Text>
-        <Text tone="muted" style={styles.lead}>Gunakan akun Eco-Donation Anda.</Text>
 
-        {error && (
-          <View style={styles.alert} accessibilityRole="alert">
-            <Text variant="bodySmall" tone="danger" weight="600">{error}</Text>
-          </View>
-        )}
-
-        <Input
-          label="Email"
-          icon="mail-outline"
-          placeholder="nama@email.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoComplete="email"
-          value={email}
-          onChangeText={setEmail}
-          error={emailError}
-          containerStyle={styles.field}
-        />
-        <Input
-          label="Kata sandi"
-          icon="lock-closed-outline"
-          placeholder="Masukkan kata sandi"
-          secureTextEntry
-          autoComplete="password"
-          value={password}
-          onChangeText={setPassword}
-          error={passwordError}
-          returnKeyType="go"
-          onSubmitEditing={handleLogin}
-          containerStyle={styles.field}
-        />
-
-        <Button title="Masuk" onPress={handleLogin} loading={loading} size="lg" style={styles.cta} />
-
-        <View style={styles.footer}>
-          <Text tone="muted">Belum punya akun? </Text>
-          <Link href="/(auth)/register" replace>
-            <Text tone="primary" weight="700">Daftar sekarang</Text>
-          </Link>
+      {/* Nilai setoran per kg: data milik produk ini, langsung di layar pertama. */}
+      <View style={styles.rates}>
+        <View style={styles.ratesHead}>
+          <Text variant="bodySmall" weight="500" tone="muted">Nilai setoran per kg</Text>
+          <Text variant="bodySmall" weight="500" tone="muted">1 poin = Rp1</Text>
         </View>
-
-        <View style={styles.demo}>
-          <Text variant="caption" tone="subtle" align="center">Akun demo: satrio@email.com • sandi 123456</Text>
+        <View style={styles.rateRow}>
+          {Object.keys(rates).map((name) => {
+            const c = categoryStyle(name);
+            return (
+              <View key={name} style={[styles.rate, { backgroundColor: c.bg }]}>
+                <Icon name={c.icon} size={18} color={c.ink} />
+                <Text variant="heading" tabular style={{ color: c.ink }}>{formatNumber(rates[name])}</Text>
+                <Text variant="caption" style={{ color: c.ink }}>{c.short}</Text>
+              </View>
+            );
+          })}
         </View>
+      </View>
+
+      {error && (
+        <View style={authStyles.alert} accessibilityRole="alert">
+          <Text variant="bodySmall" tone="danger" weight="500">{error}</Text>
+        </View>
+      )}
+
+      <Input
+        label="Email"
+        icon="mail-outline"
+        placeholder="nama@email.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoComplete="email"
+        value={email}
+        onChangeText={setEmail}
+        error={emailError}
+        containerStyle={styles.field}
+      />
+      <Input
+        label="Kata sandi"
+        icon="lock-closed-outline"
+        placeholder="Masukkan kata sandi"
+        secureTextEntry
+        autoComplete="password"
+        value={password}
+        onChangeText={setPassword}
+        error={passwordError}
+        returnKeyType="go"
+        onSubmitEditing={handleLogin}
+        containerStyle={styles.field}
+      />
+
+      <Button title="Masuk" onPress={handleLogin} loading={loading} size="lg" style={styles.cta} />
+
+      <View style={styles.footer}>
+        <Text variant="bodySmall" tone="muted">Belum punya akun? </Text>
+        <Link href="/(auth)/register" replace>
+          <Text variant="bodySmall" tone="primary" weight="600">Daftar sekarang</Text>
+        </Link>
+      </View>
+
+      <View style={styles.demo}>
+        <Icon name="information-circle-outline" size={16} color={colors.textMuted} />
+        <Text variant="caption" tone="muted">Akun demo: satrio@email.com · sandi 123456</Text>
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    marginTop: -spacing.xxl,
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.xxl,
-    paddingTop: spacing.xxl + spacing.xs,
-    ...shadow.sm,
-  },
-  lead: { marginTop: spacing.xs, marginBottom: spacing.xl },
-  alert: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
+  content: { paddingTop: spacing.xxl },
+  rates: { marginTop: spacing.xxl, marginBottom: spacing.xxxl, gap: spacing.sm },
+  ratesHead: { flexDirection: 'row', justifyContent: 'space-between' },
+  rateRow: { flexDirection: 'row', gap: spacing.sm },
+  rate: { flex: 1, borderRadius: 14, padding: spacing.sm + 2, gap: 6 },
   field: { marginBottom: spacing.lg },
   cta: { marginTop: spacing.sm },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xxl },
-  demo: { marginTop: spacing.xxl, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.lg },
+  demo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xxxl,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
 });

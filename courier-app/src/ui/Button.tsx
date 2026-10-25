@@ -1,10 +1,11 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, PressableProps, StyleSheet, View, ViewStyle, StyleProp } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing } from './theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
-type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'dangerOutline';
 type Size = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
@@ -20,13 +21,15 @@ export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> 
 
 const palette: Record<Variant, { bg: string; fg: string; border: string; pressed: string }> = {
   primary: { bg: colors.primary, fg: colors.onPrimary, border: colors.primary, pressed: colors.primaryDark },
-  secondary: { bg: colors.primarySoft, fg: colors.primaryDark, border: colors.primarySoft, pressed: colors.primarySoftPressed },
+  secondary: { bg: colors.surface, fg: colors.text, border: colors.borderStrong, pressed: colors.surfaceAlt },
   outline: { bg: colors.surface, fg: colors.text, border: colors.borderStrong, pressed: colors.surfaceAlt },
   ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent', pressed: colors.primarySoft },
-  danger: { bg: colors.danger, fg: '#FFFFFF', border: colors.danger, pressed: '#B91C1C' },
+  danger: { bg: colors.danger, fg: '#FFFFFF', border: colors.danger, pressed: '#8F1B21' },
+  // Aksi destruktif yang tidak mendesak (batalkan, lepas tugas): bergaris, teks merah.
+  dangerOutline: { bg: colors.surface, fg: colors.danger, border: colors.borderStrong, pressed: colors.dangerSoft },
 };
 
-const heights: Record<Size, number> = { sm: 36, md: 48, lg: 56 };
+const heights: Record<Size, number> = { sm: 40, md: 48, lg: 52 };
 
 export function Button({
   title,
@@ -42,7 +45,7 @@ export function Button({
 }: ButtonProps) {
   const p = palette[variant];
   const isDisabled = disabled || loading;
-  const iconSize = size === 'sm' ? 16 : 20;
+  const iconSize = size === 'sm' ? 16 : 18;
 
   return (
     <Pressable
@@ -67,11 +70,11 @@ export function Button({
         <ActivityIndicator color={p.fg} />
       ) : (
         <View style={styles.row}>
-          {icon && <Ionicons name={icon} size={iconSize} color={p.fg} />}
-          <Text variant={size === 'sm' ? 'bodySmall' : 'subheading'} weight="700" style={{ color: p.fg }}>
+          {icon && <Icon name={icon} size={iconSize} color={p.fg} />}
+          <Text variant={size === 'sm' ? 'bodySmall' : 'subheading'} weight="600" style={{ color: p.fg }}>
             {title}
           </Text>
-          {iconRight && <Ionicons name={iconRight} size={iconSize} color={p.fg} />}
+          {iconRight && <Icon name={iconRight} size={iconSize} color={p.fg} />}
         </View>
       )}
     </Pressable>
@@ -80,7 +83,7 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

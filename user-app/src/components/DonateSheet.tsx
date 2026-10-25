@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Chip, Input, Text, colors, radius, spacing } from '../ui';
+import { Button, Input, Text, colors, radius, spacing } from '../ui';
 import { formatNumber, formatRupiah } from '../lib/format';
 
 const PRESETS = [1000, 5000, 10000, 25000];
@@ -40,15 +40,15 @@ export function DonateSheet({ visible, title, balance, minimum, loading, onClose
 
           <View style={styles.balance}>
             <Text variant="bodySmall" tone="muted">Saldo Anda</Text>
-            <Text variant="subheading">{formatNumber(balance)} poin</Text>
+            <Text variant="subheading" tone="primary" tabular>{formatNumber(balance)} poin</Text>
           </View>
 
           <View style={styles.presets}>
             {PRESETS.map((p) => (
-              <Chip key={p} label={formatNumber(p)} selected={amount === p} disabled={p > balance}
+              <PresetChip key={p} label={formatNumber(p)} selected={amount === p} disabled={p > balance}
                 onPress={() => setRaw(String(p))} />
             ))}
-            <Chip label="Semua" selected={amount === balance && balance > 0} disabled={balance < minimum}
+            <PresetChip label="Semua" selected={amount === balance && balance > 0} disabled={balance < minimum}
               onPress={() => setRaw(String(balance))} />
           </View>
 
@@ -77,6 +77,33 @@ export function DonateSheet({ visible, title, balance, minimum, loading, onClose
   );
 }
 
+// Pilihan nominal: terpilih = latar hijau lembut + garis primer, bukan isi gelap.
+function PresetChip({ label, selected, disabled, onPress }: {
+  label: string;
+  selected: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled: !!disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.chip,
+        selected && styles.chipSelected,
+        pressed && !selected && styles.chipPressed,
+        disabled && styles.chipDisabled,
+      ]}
+    >
+      <Text variant="bodySmall" weight={selected ? '600' : '500'} tabular style={{ color: selected ? colors.primary : colors.text }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: colors.overlay },
   sheet: {
@@ -86,17 +113,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl,
     paddingTop: spacing.md,
   },
-  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: spacing.lg },
+  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong, marginBottom: spacing.lg },
   sub: { marginTop: 2 },
   balance: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: colors.primarySoft,
-    padding: spacing.md,
-    borderRadius: radius.md,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.md,
+    borderRadius: 14,
     marginTop: spacing.lg,
   },
   presets: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginVertical: spacing.lg },
+  chip: {
+    height: 38,
+    paddingHorizontal: spacing.md + 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary, borderWidth: 1.5 },
+  chipPressed: { backgroundColor: colors.surfaceAlt },
+  chipDisabled: { opacity: 0.4 },
   cta: { marginTop: spacing.xl },
 });

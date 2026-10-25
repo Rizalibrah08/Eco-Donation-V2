@@ -4,8 +4,10 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import api, { getErrorMessage } from '../../services/api';
 import { useSocketEvent } from '../../services/socket';
 import { useAuthStore } from '../../store/auth';
-import { TaskCard } from '../../components/TaskCard';
-import { Avatar, EmptyState, Screen, Segmented, SkeletonCard, Text, spacing } from '../../ui';
+import { InitialsAvatar, TaskCard } from '../../components/TaskCard';
+import { Card, EmptyState, Screen, Segmented, SkeletonCard, Text, colors, fonts, spacing } from '../../ui';
+import { totalKg } from '../../lib/status';
+import { formatNumber } from '../../lib/format';
 import type { PickupOrder } from '../../lib/types';
 
 type Scope = 'available' | 'mine';
@@ -55,8 +57,21 @@ export default function TasksScreen() {
           <Text variant="bodySmall" tone="muted">{greeting},</Text>
           <Text variant="title" numberOfLines={1}>{user?.name}</Text>
         </View>
-        <Avatar name={user?.name} />
+        <InitialsAvatar name={user?.name} size={44} bg={colors.primarySoft} fg={colors.primary} />
       </View>
+
+      {lists.mine && lists.available && (
+        <Card style={styles.summary} padded={false}>
+          <Stat value={formatNumber(lists.mine.length)} label="Tugas aktif" />
+          <View style={styles.vrule} />
+          <Stat value={formatNumber(lists.available.length)} label="Tersedia" />
+          <View style={styles.vrule} />
+          <Stat
+            value={`${formatNumber(lists.mine.reduce((sum, o) => sum + totalKg(o.items), 0), 1)} kg`}
+            label="Muatan tugas"
+          />
+        </Card>
+      )}
 
       <Segmented
         value={scope}
@@ -93,8 +108,21 @@ export default function TasksScreen() {
   );
 }
 
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue} tabular numberOfLines={1}>{value}</Text>
+      <Text variant="caption" tone="muted" numberOfLines={1}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xl },
+  head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xxl },
+  summary: { flexDirection: 'row', alignItems: 'stretch', paddingVertical: spacing.lg, marginBottom: spacing.xxl },
+  stat: { flex: 1, paddingHorizontal: spacing.lg, gap: spacing.xxs },
+  statValue: { fontSize: 20, lineHeight: 26, fontFamily: fonts.semibold, color: colors.text },
+  vrule: { width: 1, backgroundColor: colors.rule },
   tabs: { marginBottom: spacing.lg },
 });

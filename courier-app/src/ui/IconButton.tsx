@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, ViewStyle, StyleProp } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import { colors, radius } from './theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
 interface IconButtonProps {
@@ -40,7 +41,7 @@ export function IconButton({
         style,
       ]}
     >
-      <Ionicons name={icon} size={size * 0.5} color={fg} />
+      <Icon name={icon} size={size * 0.5} color={fg} />
       {!!badge && badge > 0 && (
         <View style={styles.badge}>
           <Text variant="caption" weight="700" style={styles.badgeText}>

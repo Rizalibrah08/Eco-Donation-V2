@@ -78,9 +78,9 @@ export function Screen({
 const styles = StyleSheet.create({
   root: { flex: 1 },
   flex: { flex: 1 },
-  padded: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  padded: { paddingHorizontal: spacing.xxl, paddingTop: spacing.md },
   footer: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xxl,
     paddingTop: spacing.md,
     backgroundColor: colors.surface,
     borderTopWidth: 1,

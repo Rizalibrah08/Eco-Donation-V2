@@ -32,12 +32,14 @@ export function AppBar({ title, subtitle, back = true, onBack, right, transparen
         transparent ? styles.transparent : styles.solid,
       ]}
     >
-      <View style={styles.side}>
-        {back && <IconButton icon="chevron-back" accessibilityLabel="Kembali" onPress={handleBack} />}
-      </View>
+      {back ? (
+        <IconButton icon="chevron-back" variant="plain" size={44} accessibilityLabel="Kembali" onPress={handleBack} />
+      ) : (
+        <View style={styles.inset} />
+      )}
       <View style={styles.center}>
-        <Text variant="heading" numberOfLines={1} align="center">{title}</Text>
-        {subtitle && <Text variant="caption" tone="muted" numberOfLines={1} align="center">{subtitle}</Text>}
+        <Text variant="heading" numberOfLines={1}>{title}</Text>
+        {subtitle && <Text variant="caption" tone="muted" numberOfLines={1}>{subtitle}</Text>}
       </View>
       <View style={[styles.side, styles.right]}>{right}</View>
     </View>
@@ -48,12 +50,14 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
+    gap: spacing.xs,
   },
   solid: { backgroundColor: colors.bg },
   transparent: { backgroundColor: 'transparent' },
-  side: { width: 48 },
+  side: { minWidth: 44 },
+  inset: { width: spacing.lg },
   right: { alignItems: 'flex-end' },
-  center: { flex: 1, alignItems: 'center' },
+  center: { flex: 1 },
 });

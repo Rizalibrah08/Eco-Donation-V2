@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import api, { getErrorMessage } from '../../services/api';
 import { useAuthStore } from '../../store/auth';
 import { useRates } from '../../hooks/useRates';
@@ -9,8 +8,7 @@ import { useDonate } from '../../hooks/useDonate';
 import { HeroHeader } from '../../components/HeroHeader';
 import { DonateSheet } from '../../components/DonateSheet';
 import {
-  Button, Card, Dialog, EmptyState, Pill, ProgressBar, Screen, Skeleton, Text, colors, radius, spacing,
-} from '../../ui';
+  Button, Card, Dialog, Divider, EmptyState, Pill, ProgressBar, Screen, Skeleton, Text, colors, radius, spacing, Icon } from '../../ui';
 import { compactNumber, daysLeft, formatDate, formatNumber, formatRupiah } from '../../lib/format';
 import type { Campaign } from '../../lib/types';
 
@@ -52,7 +50,7 @@ export default function CampaignDetailScreen() {
         edgeToEdge
         statusBar="light"
         footer={
-          <Button title="Donasi Sekarang" icon="heart" size="lg" disabled={!campaign} onPress={() => donate.setOpen(true)} />
+          <Button title="Donasi sekarang" icon="heart-outline" size="lg" disabled={!campaign} onPress={() => donate.setOpen(true)} />
         }
       >
         <HeroHeader imageUrl={campaign?.image_url || null} />
@@ -61,21 +59,21 @@ export default function CampaignDetailScreen() {
             <>
               <Skeleton width="40%" height={20} />
               <Skeleton height={28} style={{ marginTop: spacing.md }} />
-              <Skeleton height={120} radius={radius.lg} style={{ marginTop: spacing.xl }} />
+              <Skeleton height={160} radius={radius.card} style={{ marginTop: spacing.xl }} />
             </>
           ) : (
             <>
               <View style={styles.pills}>
-                <Pill label={campaign.category} tone="primary" />
-                {!!campaign.is_urgent && <Pill label="Mendesak" tone="danger" icon="flash" />}
+                <Pill label={campaign.category} tone="neutral" />
+                {!!campaign.is_urgent && <Pill label="Mendesak" tone="danger" />}
               </View>
               <Text variant="title" style={styles.title}>{campaign.title}</Text>
               <View style={styles.org}>
-                <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
-                <Text variant="bodySmall" tone="muted">{campaign.organizer}</Text>
+                <Icon name="shield-checkmark-outline" size={16} color={colors.textMuted} />
+                <Text variant="bodySmall" tone="muted" numberOfLines={1} style={styles.shrink}>{campaign.organizer}</Text>
                 {campaign.location && (
                   <>
-                    <Text tone="subtle">•</Text>
+                    <Text variant="bodySmall" tone="subtle">·</Text>
                     <Text variant="bodySmall" tone="muted" numberOfLines={1} style={styles.flex}>{campaign.location}</Text>
                   </>
                 )}
@@ -83,15 +81,24 @@ export default function CampaignDetailScreen() {
 
               <Card style={styles.progressCard}>
                 <View style={styles.amountRow}>
-                  <Text variant="title" tone="primary">{formatRupiah(campaign.collected_amount)}</Text>
-                  <Text variant="bodySmall" tone="muted">{Math.round(progress * 100)}%</Text>
+                  <View style={styles.flex}>
+                    <Text variant="display" tabular numberOfLines={1} adjustsFontSizeToFit>
+                      {formatRupiah(campaign.collected_amount)}
+                    </Text>
+                    <Text variant="bodySmall" tone="muted" tabular>
+                      terkumpul dari target {formatRupiah(campaign.target_amount)}
+                    </Text>
+                  </View>
+                  <Text variant="heading" tone="primary" tabular>{Math.round(progress * 100)}%</Text>
                 </View>
-                <Text variant="bodySmall" tone="muted">terkumpul dari target {formatRupiah(campaign.target_amount)}</Text>
-                <ProgressBar value={progress} height={10} style={styles.bar} />
+                <ProgressBar value={progress} height={8} color={colors.primaryData} style={styles.bar} />
+                <Divider style={styles.rule} />
                 <View style={styles.stats}>
-                  <Stat icon="people" value={compactNumber(campaign.donor_count)} label="Donatur" />
-                  <Stat icon="time" value={left !== null && left >= 0 ? `${left} hari` : 'Berakhir'} label="Sisa waktu" />
-                  <Stat icon="calendar" value={campaign.deadline ? formatDate(campaign.deadline, false) : '-'} label="Batas" />
+                  <Stat value={compactNumber(campaign.donor_count)} label="Donatur" />
+                  <View style={styles.vRule} />
+                  <Stat value={left !== null && left >= 0 ? `${left} hari` : 'Berakhir'} label="Sisa waktu" />
+                  <View style={styles.vRule} />
+                  <Stat value={campaign.deadline ? formatDate(campaign.deadline, false) : '-'} label="Batas" />
                 </View>
               </Card>
 
@@ -101,24 +108,23 @@ export default function CampaignDetailScreen() {
               {campaign.updates.length > 0 && (
                 <>
                   <Text variant="heading" style={styles.section}>Kabar terbaru</Text>
-                  {campaign.updates.map((u, i) => (
-                    <View key={i} style={styles.update}>
-                      <View style={styles.updateDot} />
-                      <View style={styles.flex}>
-                        <Text variant="caption" tone="subtle">{formatDate(u.date)}</Text>
-                        <Text variant="bodySmall">{u.text}</Text>
+                  <Card padded={false}>
+                    {campaign.updates.map((u, i) => (
+                      <View key={i} style={[styles.update, i > 0 && styles.updateRule]}>
+                        <Text variant="caption" tone="muted">{formatDate(u.date)}</Text>
+                        <Text variant="body" style={styles.updateText}>{u.text}</Text>
                       </View>
-                    </View>
-                  ))}
+                    ))}
+                  </Card>
                 </>
               )}
 
-              <Card style={styles.info}>
-                <Ionicons name="information-circle" size={20} color={colors.info} />
+              <View style={styles.info}>
+                <Icon name="information-circle-outline" size={18} color={colors.textMuted} />
                 <Text variant="bodySmall" tone="muted" style={styles.flex}>
                   1 poin = Rp1. Poin yang Anda donasikan langsung menambah dana kampanye ini dan tercatat di riwayat Anda.
                 </Text>
-              </Card>
+              </View>
             </>
           )}
         </View>
@@ -146,35 +152,43 @@ export default function CampaignDetailScreen() {
   );
 }
 
-function Stat({ icon, value, label }: { icon: keyof typeof Ionicons.glyphMap; value: string; label: string }) {
+function Stat({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.stat}>
-      <Ionicons name={icon} size={16} color={colors.textSubtle} />
-      <Text variant="subheading">{value}</Text>
-      <Text variant="caption" tone="subtle">{label}</Text>
+      <Text variant="bodySmall" weight="600" tabular numberOfLines={1}>{value}</Text>
+      <Text variant="caption" tone="muted" numberOfLines={1}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   body: {
-    marginTop: -spacing.xl,
+    marginTop: -spacing.xxl,
     backgroundColor: colors.bg,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    padding: spacing.xl,
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.lg,
   },
   pills: { flexDirection: 'row', gap: spacing.sm },
   title: { marginTop: spacing.md },
   org: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2, marginTop: spacing.sm },
   flex: { flex: 1 },
-  progressCard: { marginTop: spacing.xl },
-  amountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  bar: { marginTop: spacing.md },
-  stats: { flexDirection: 'row', marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border },
-  stat: { flex: 1, alignItems: 'center', gap: 2 },
-  section: { marginTop: spacing.xxl, marginBottom: spacing.sm },
-  update: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
-  updateDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginTop: 4 },
-  info: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xxl, backgroundColor: colors.infoSoft, borderColor: colors.infoSoft },
+  shrink: { flexShrink: 1 },
+  progressCard: { marginTop: spacing.xl, padding: spacing.xl },
+  amountRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  bar: { marginTop: spacing.lg },
+  rule: { marginVertical: spacing.lg },
+  stats: { flexDirection: 'row' },
+  stat: { flex: 1, alignItems: 'center', gap: 2, paddingHorizontal: spacing.xs },
+  vRule: { width: 1, backgroundColor: colors.rule },
+  section: { marginTop: spacing.xxl, marginBottom: spacing.md },
+  update: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md + 2 },
+  updateRule: { borderTopWidth: 1, borderTopColor: colors.rule },
+  updateText: { marginTop: 2 },
+  info: {
+    flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xxl, padding: spacing.md + 2,
+    borderRadius: 14, backgroundColor: colors.surfaceAlt,
+  },
 });

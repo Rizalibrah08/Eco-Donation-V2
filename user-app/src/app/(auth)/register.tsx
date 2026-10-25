@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Link } from 'expo-router';
 import api, { getErrorMessage } from '../../services/api';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/auth';
-import { AuthHero } from '../../components/AuthHero';
-import { Button, Input, Screen, Text, colors, radius, spacing, shadow, toast } from '../../ui';
+import { AuthHero, authStyles } from '../../components/AuthHero';
+import { AppBar, Button, Input, Screen, Text, spacing, toast } from '../../ui';
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
 export default function RegisterScreen() {
   const setSession = useAuthStore((s) => s.setSession);
+  const router = useRouter();
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -48,12 +50,12 @@ export default function RegisterScreen() {
   };
 
   return (
-    <Screen padded={false} edgeToEdge statusBar="light" background={colors.surface}>
-      <AuthHero title="Buat akun baru" subtitle="Mulai setor sampah dan kumpulkan poin donasi." />
-      <View style={styles.sheet}>
+    <Screen header={<AppBar title="" onBack={() => router.replace('/(auth)/login')} />} contentStyle={styles.content}>
+      <AuthHero mark={false} title="Buat akun baru" subtitle="Mulai setor sampah dan kumpulkan poin donasi." />
+      <View style={styles.form}>
         {error && (
-          <View style={styles.alert} accessibilityRole="alert">
-            <Text variant="bodySmall" tone="danger" weight="600">{error}</Text>
+          <View style={authStyles.alert} accessibilityRole="alert">
+            <Text variant="bodySmall" tone="danger" weight="500">{error}</Text>
           </View>
         )}
         <Input label="Nama lengkap" icon="person-outline" placeholder="Nama Anda" value={form.name}
@@ -73,9 +75,9 @@ export default function RegisterScreen() {
         <Button title="Daftar" onPress={handleRegister} loading={loading} size="lg" style={styles.cta} />
 
         <View style={styles.footer}>
-          <Text tone="muted">Sudah punya akun? </Text>
+          <Text variant="bodySmall" tone="muted">Sudah punya akun? </Text>
           <Link href="/(auth)/login" replace>
-            <Text tone="primary" weight="700">Masuk</Text>
+            <Text variant="bodySmall" tone="primary" weight="600">Masuk</Text>
           </Link>
         </View>
       </View>
@@ -84,17 +86,9 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  sheet: {
-    marginTop: -spacing.xxl,
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.xxl,
-    paddingTop: spacing.xxl + spacing.xs,
-    ...shadow.sm,
-  },
-  alert: { backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg },
+  content: { paddingTop: 0 },
+  form: { marginTop: spacing.xxl },
   field: { marginBottom: spacing.lg },
   cta: { marginTop: spacing.sm },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xxl },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.lg },
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, StyleProp, ViewStyle } from 'react-native';
-import { colors, radius, shadow, spacing } from './theme';
+import { colors, radius, spacing } from './theme';
 import { Text } from './Text';
 
 interface SegmentedProps<T extends string> {
@@ -23,12 +23,12 @@ export function Segmented<T extends string>({ options, value, onChange, style }:
             onPress={() => onChange(opt.value)}
             style={[styles.item, active && styles.active]}
           >
-            <Text variant="bodySmall" weight="700" tone={active ? 'default' : 'muted'}>
+            <Text variant="bodySmall" weight="500" tone={active ? 'default' : 'muted'}>
               {opt.label}
             </Text>
             {opt.count !== undefined && opt.count > 0 && (
               <View style={[styles.count, active && styles.countActive]}>
-                <Text variant="caption" weight="700" style={{ color: active ? colors.onPrimary : colors.textMuted, fontSize: 11 }}>
+                <Text variant="caption" weight="600" style={{ color: active ? colors.onPrimary : colors.text, fontSize: 11 }}>
                   {opt.count}
                 </Text>
               </View>
@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
     backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     padding: spacing.xs,
     gap: spacing.xs,
   },
@@ -53,17 +53,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs + 2,
     height: 38,
-    borderRadius: radius.sm + 2,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  active: { backgroundColor: colors.surface, ...shadow.sm },
+  active: { backgroundColor: colors.surface },
   count: {
     minWidth: 20,
     height: 20,
     paddingHorizontal: 5,
     borderRadius: 10,
-    backgroundColor: colors.border,
+    backgroundColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },

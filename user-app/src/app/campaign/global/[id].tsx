@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Image, Linking, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import api from '../../../services/api';
 import { getNonprofit, GlobalNonprofit } from '../../../services/everyOrg';
 import { useAuthStore } from '../../../store/auth';
@@ -10,8 +9,7 @@ import { useDonate } from '../../../hooks/useDonate';
 import { HeroHeader } from '../../../components/HeroHeader';
 import { DonateSheet } from '../../../components/DonateSheet';
 import {
-  Button, Card, Dialog, EmptyState, Pill, Screen, Skeleton, Text, colors, radius, spacing,
-} from '../../../ui';
+  Button, Card, Dialog, Divider, EmptyState, Pill, Screen, Skeleton, Text, colors, radius, spacing, Icon } from '../../../ui';
 import { formatNumber } from '../../../lib/format';
 
 export default function GlobalCampaignScreen() {
@@ -65,57 +63,57 @@ export default function GlobalCampaignScreen() {
         padded={false}
         edgeToEdge
         statusBar="light"
-        footer={<Button title="Donasikan Poin" icon="heart" size="lg" disabled={!org} onPress={() => donate.setOpen(true)} />}
+        footer={<Button title="Donasikan poin" icon="heart-outline" size="lg" disabled={!org} onPress={() => donate.setOpen(true)} />}
       >
         <HeroHeader imageUrl={org?.imageUrl || null} />
         <View style={styles.body}>
           {!org ? (
             <>
               <Skeleton width="50%" height={20} />
-              <Skeleton height={80} radius={radius.lg} style={{ marginTop: spacing.xl }} />
+              <Skeleton height={120} radius={radius.card} style={{ marginTop: spacing.xl }} />
             </>
           ) : (
             <>
               <View style={styles.head}>
                 {org.logoUrl && <Image source={{ uri: org.logoUrl }} style={styles.logo} />}
                 <View style={styles.flex}>
-                  <Pill label="Organisasi Global" tone="info" icon="earth" />
+                  <Pill label="Organisasi Global" tone="neutral" icon="earth-outline" />
                   <Text variant="title" style={styles.title}>{org.name}</Text>
                   {org.location && <Text variant="bodySmall" tone="muted">{org.location}</Text>}
                 </View>
               </View>
 
               <Card style={styles.statsCard}>
-                <View style={styles.stat}>
-                  <Text variant="title" tone="primary">{formatNumber(stats?.collected_points)}</Text>
-                  <Text variant="caption" tone="subtle">Poin dari komunitas Eco-Donation</Text>
-                </View>
-                <View style={styles.vDivider} />
-                <View style={styles.stat}>
-                  <Text variant="title">{formatNumber(stats?.donor_count)}</Text>
-                  <Text variant="caption" tone="subtle">Donatur</Text>
+                <Text variant="display" tabular numberOfLines={1} adjustsFontSizeToFit>
+                  {formatNumber(stats?.collected_points)}
+                </Text>
+                <Text variant="bodySmall" tone="muted">Poin dari komunitas Eco-Donation</Text>
+                <Divider style={styles.rule} />
+                <View style={styles.statRow}>
+                  <Text variant="bodySmall" tone="muted">Donatur</Text>
+                  <Text variant="bodySmall" weight="600" tabular>{formatNumber(stats?.donor_count)}</Text>
                 </View>
               </Card>
 
               <Text variant="heading" style={styles.section}>Tentang organisasi</Text>
               <Text tone="muted" numberOfLines={expanded ? undefined : 6}>{org.description}</Text>
               {org.description.length > 280 && (
-                <Text tone="primary" weight="700" onPress={() => setExpanded((e) => !e)} style={styles.more}>
+                <Text variant="bodySmall" tone="primary" weight="600" onPress={() => setExpanded((e) => !e)} style={styles.more}>
                   {expanded ? 'Tampilkan lebih sedikit' : 'Baca selengkapnya'}
                 </Text>
               )}
 
               {org.profileUrl && (
-                <Button title="Lihat profil di Every.org" variant="outline" icon="open-outline" style={styles.section}
+                <Button title="Lihat profil di Every.org" variant="secondary" icon="open-outline" style={styles.section}
                   onPress={() => Linking.openURL(org.profileUrl!)} />
               )}
 
-              <Card style={styles.info}>
-                <Ionicons name="information-circle" size={20} color={colors.info} />
+              <View style={styles.info}>
+                <Icon name="information-circle-outline" size={18} color={colors.textMuted} />
                 <Text variant="bodySmall" tone="muted" style={styles.flex}>
                   Donasi poin untuk organisasi global dikumpulkan oleh Eco-Donation dan disalurkan melalui Every.org secara berkala.
                 </Text>
-              </Card>
+              </View>
             </>
           )}
         </View>
@@ -145,20 +143,25 @@ export default function GlobalCampaignScreen() {
 
 const styles = StyleSheet.create({
   body: {
-    marginTop: -spacing.xl,
+    marginTop: -spacing.xxl,
     backgroundColor: colors.bg,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    padding: spacing.xl,
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.lg,
   },
   head: { flexDirection: 'row', gap: spacing.lg, alignItems: 'flex-start' },
-  logo: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  logo: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   flex: { flex: 1 },
   title: { marginTop: spacing.sm },
-  statsCard: { flexDirection: 'row', marginTop: spacing.xl },
-  stat: { flex: 1, alignItems: 'center', gap: 2 },
-  vDivider: { width: 1, backgroundColor: colors.border },
-  section: { marginTop: spacing.xxl, marginBottom: spacing.sm },
+  statsCard: { marginTop: spacing.xl, padding: spacing.xl },
+  rule: { marginVertical: spacing.lg },
+  statRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  section: { marginTop: spacing.xxl, marginBottom: spacing.md },
   more: { marginTop: spacing.sm },
-  info: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xxl, backgroundColor: colors.infoSoft, borderColor: colors.infoSoft },
+  info: {
+    flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xxl, padding: spacing.md + 2,
+    borderRadius: 14, backgroundColor: colors.surfaceAlt,
+  },
 });

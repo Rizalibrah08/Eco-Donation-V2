@@ -64,12 +64,14 @@ export default function SettingsScreen() {
   return (
     <Screen header={<AppBar title="Edit profil" />}>
       <View style={styles.head}>
-        <Avatar name={name || user?.name} size={72} />
-        <Text variant="heading" style={styles.headName}>{name || user?.name}</Text>
-        <Text variant="bodySmall" tone="muted">{user?.email}</Text>
+        <Avatar name={name || user?.name} size={64} />
+        <View style={styles.headText}>
+          <Text variant="heading" numberOfLines={1}>{name || user?.name}</Text>
+          <Text variant="caption" tone="muted" numberOfLines={1}>{user?.email}</Text>
+        </View>
       </View>
 
-      <Text variant="overline" tone="subtle" style={styles.section}>Data diri</Text>
+      <Text variant="heading" style={styles.section}>Data diri</Text>
       <Card style={styles.card}>
         <Input label="Nama lengkap" icon="person-outline" value={name} onChangeText={setName} maxLength={80}
           autoCapitalize="words" />
@@ -80,7 +82,7 @@ export default function SettingsScreen() {
         <Button title="Simpan perubahan" onPress={saveProfile} loading={savingProfile} disabled={!profileChanged} />
       </Card>
 
-      <Text variant="overline" tone="subtle" style={styles.section}>Ubah kata sandi</Text>
+      <Text variant="heading" style={styles.section}>Ubah kata sandi</Text>
       <Card style={styles.card}>
         <Input label="Kata sandi saat ini" icon="lock-closed-outline" value={current} onChangeText={setCurrent}
           secureTextEntry autoCapitalize="none" />
@@ -96,8 +98,8 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  head: { alignItems: 'center', paddingVertical: spacing.md },
-  headName: { marginTop: spacing.md },
-  section: { marginTop: spacing.xxl, marginBottom: spacing.sm, marginLeft: spacing.xs },
-  card: { gap: spacing.lg },
+  head: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.sm },
+  headText: { flex: 1, gap: 2 },
+  section: { marginTop: spacing.xxl, marginBottom: spacing.md },
+  card: { gap: spacing.lg, padding: spacing.xl },
 });

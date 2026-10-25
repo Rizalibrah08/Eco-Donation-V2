@@ -1,7 +1,8 @@
 import React, { forwardRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, TextInputProps, View, StyleProp, ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import type { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from './theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
 export interface InputProps extends TextInputProps {
@@ -19,17 +20,17 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 ) {
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(!!secureTextEntry);
-  const borderColor = error ? colors.danger : focused ? colors.primary : colors.border;
+  const borderColor = error ? colors.danger : focused ? colors.primary : colors.borderStrong;
 
   return (
     <View style={containerStyle}>
       {label && (
-        <Text variant="bodySmall" weight="600" style={styles.label}>
+        <Text variant="bodySmall" weight="500" style={styles.label}>
           {label}
         </Text>
       )}
       <View style={[styles.field, { borderColor }, !editable && styles.disabled, focused && styles.focused]}>
-        {icon && <Ionicons name={icon} size={20} color={focused ? colors.primary : colors.textSubtle} />}
+        {icon && <Icon name={icon} size={18} color={focused ? colors.primary : colors.textMuted} />}
         <TextInput
           ref={ref}
           {...rest}
@@ -47,7 +48,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             onPress={() => setHidden((h) => !h)}
             hitSlop={10}
           >
-            <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={colors.textSubtle} />
+            <Icon name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={colors.textSubtle} />
           </Pressable>
         )}
         {right}
@@ -55,21 +56,21 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       {error ? (
         <Text variant="caption" tone="danger" style={styles.helper}>{error}</Text>
       ) : hint ? (
-        <Text variant="caption" tone="subtle" style={styles.helper}>{hint}</Text>
+        <Text variant="caption" tone="muted" style={styles.helper}>{hint}</Text>
       ) : null}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  label: { marginBottom: spacing.xs + 2, color: colors.text },
+  label: { marginBottom: spacing.sm, color: colors.text },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: 50,
+    minHeight: 48,
     paddingHorizontal: spacing.md + 2,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
   },
