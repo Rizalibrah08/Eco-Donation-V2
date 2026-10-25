@@ -11,9 +11,10 @@ Proyek tugas besar mata kuliah Pemrograman Mobile Lanjut.
 | Folder | Isi | Teknologi |
 |--------|-----|-----------|
 | `backend-api` | REST API + Socket.io, database, aturan bisnis | Express 5, better-sqlite3, Zod, JWT, bcryptjs, Socket.io, Jest |
-| `user-app` | Aplikasi warga: setor sampah, lacak kurir, pindai QR, donasi, lencana | Expo SDK 56, Expo Router, Zustand, expo-camera, expo-location |
-| `courier-app` | Aplikasi kurir: ambil tugas, navigasi, timbang, tampilkan QR | Expo SDK 56, Expo Router, Zustand, expo-location, react-native-qrcode-svg |
+| `user-app` | Aplikasi warga: setor sampah, lacak kurir, pindai QR, donasi, lencana | Expo SDK 56, Expo Router, Zustand, expo-camera, expo-location, lucide-react-native |
+| `courier-app` | Aplikasi kurir: ambil tugas, navigasi, timbang, tampilkan QR | Expo SDK 56, Expo Router, Zustand, expo-location, react-native-qrcode-svg, lucide-react-native |
 | `scripts/sync-ui.js` | Menyalin design system `user-app/src/ui` ke `courier-app/src/ui` | Node.js |
+| `scripts/export-figma.js` | Mengekspor layar desain dari Figma menjadi PNG | Node.js, Figma REST API |
 
 Kedua aplikasi berjalan di **Expo Go** (tanpa build native). Peta memakai Leaflet di dalam WebView dengan tile OpenStreetMap HOT (cadangan Esri), dan pencarian alamat memakai Photon API. Semuanya gratis, tanpa API key.
 
@@ -99,8 +100,8 @@ sequenceDiagram
 
 ### Prasyarat
 - Node.js 20 atau lebih baru dan npm
-- Aplikasi **Expo Go** di HP (SDK 56)
-- Laptop dan HP terhubung ke **WiFi yang sama**
+- Aplikasi **Expo Go untuk SDK 56** di HP. Expo Go di Play Store biasanya hanya mendukung SDK terbaru; bila muncul pesan *"Project is incompatible with this version of Expo Go"*, pasang APK Expo Go SDK 56 dari [expo.dev/go](https://expo.dev/go).
+- Laptop dan HP terhubung ke **WiFi yang sama** (atau pakai tunnel, lihat di bawah)
 
 ### 1. Backend
 ```bash
@@ -126,14 +127,27 @@ npm install
 npx expo start --port 8082
 ```
 
-Pindai QR dari terminal Expo menggunakan Expo Go. Untuk menguji alur lengkap, jalankan kedua aplikasi di dua HP atau emulator yang berbeda.
+Pindai QR dari terminal Expo menggunakan Expo Go. Untuk menguji alur lengkap, jalankan kedua aplikasi di dua HP atau emulator yang berbeda. Aplikasi ditujukan untuk HP; versi web (`w` / `localhost:8081`) hanya untuk pratinjau dan tidak mendukung kamera.
 
 ### Alamat backend
-Aplikasi otomatis memakai **IP laptop yang menjalankan `expo start`** dengan port 3000, sehingga biasanya tidak perlu mengubah apa pun. Jika memakai tunnel/ngrok atau jaringan berbeda, salin `.env.example` menjadi `.env` di folder aplikasi lalu isi:
+Aplikasi otomatis memakai **IP laptop yang menjalankan `expo start`** dengan port 3000, sehingga biasanya tidak perlu mengubah apa pun. Jika memakai tunnel atau jaringan berbeda, salin `.env.example` menjadi `.env` di folder aplikasi lalu isi:
 ```
 EXPO_PUBLIC_API_URL=http://192.168.1.10:3000
 ```
 Lalu jalankan ulang `npx expo start -c`.
+
+### HP tidak bisa menjangkau laptop (tunnel)
+Cek dulu dari browser HP: `http://IP-LAPTOP:8081/status` harus menampilkan `packager-status:running`. Bila tidak (WiFi berbeda, data seluler, atau router dengan *client isolation*), buka backend dan Metro lewat internet:
+```bash
+# terminal 1 — backend tetap jalan dengan npm start
+npx -y cloudflared tunnel --url http://localhost:3000
+# salin alamat https://….trycloudflare.com ke user-app/.env dan courier-app/.env:
+#   EXPO_PUBLIC_API_URL=https://….trycloudflare.com   (tanpa /api, tanpa / di akhir)
+
+# terminal 2
+cd user-app && npx expo start --tunnel -c
+```
+Alamat `trycloudflare.com` berubah setiap kali cloudflared dijalankan ulang, jadi perbarui `.env` bila perlu. Matikan tunnel setelah selesai karena backend dapat diakses siapa pun yang mengetahui alamatnya.
 
 ### Akun demo (kata sandi `123456`)
 
@@ -144,13 +158,29 @@ Lalu jalankan ulang `npx expo start -c`.
 
 ---
 
-## 🎨 Design System
+## 🎨 Desain & Design System
 
-Komponen UI (`Button`, `Card`, `Input`, `Dialog`, `Toast`, `Segmented`, dan lainnya) berada di `user-app/src/ui`. Hanya `theme.ts` yang berbeda di tiap aplikasi: hijau `#0E7C66` untuk pengguna dan biru `#1D4ED8` untuk kurir. Setelah mengubah komponen di user-app:
+Desain lengkap (high-fidelity, wireframe, dan prototype yang bisa diklik) ada di Figma:
+**[Eco-Donation — Wireframe (User & Kurir)](https://www.figma.com/design/WRh3634Jh2BbSXQgcGoAm3)**. Halaman *Fondasi & Komponen* berisi token warna, gaya teks, ikon, dan komponen; halaman *User App* dan *Kurir App* berisi layar desain di baris atas dan wireframe di baris bawah. Klik ▶ Present untuk mencoba alur prototype.
+
+Prinsip desainnya:
+- **Warna hanya untuk data.** Kartu putih bergaris 1px dengan radius 20, tanpa bayangan dan gradasi. Satu tombol utama per layar.
+- **Warna kategori sampah** berupa pasangan pastel + tinta senada (plastik biru, kertas pasir, kaleng bata, kaca zaitun), dipakai lewat `CategoryTile` / `CategoryChip`.
+- **Huruf Plus Jakarta Sans** (`@expo-google-fonts/plus-jakarta-sans`). Gunakan prop `weight` pada `<Text>`, jangan `fontWeight`, karena font kustom di Android memilih ketebalan lewat keluarga font.
+- **Ikon Lucide** lewat `<Icon name="…" />` dari `ui/Icon.tsx`. Nama ikon mengikuti gaya Ionicons (misalnya `mail-outline`) dan dipetakan ke Lucide.
+- Warna merek: hijau `#0A5C4C` untuk pengguna dan biru `#1E3A8A` untuk kurir.
+
+Komponen UI (`Button`, `Card`, `Input`, `Icon`, `Category`, `Dialog`, `Toast`, `Segmented`, dan lainnya) berada di `user-app/src/ui`. Hanya `theme.ts` yang berbeda di tiap aplikasi. Setelah mengubah komponen di user-app:
 
 ```bash
 node scripts/sync-ui.js          # salin ke courier-app
 node scripts/sync-ui.js --check  # cek apakah sudah sinkron (exit 1 bila belum)
+```
+
+Gambar desain tersimpan di `design & alur kerja sistem/design-v2/`. Untuk mengekspor ulang semua layar (hi-fi, wireframe, fondasi) sebagai PNG 2x, buat *personal access token* Figma (Settings → Security) lalu jalankan:
+
+```bash
+FIGMA_TOKEN=<token> node scripts/export-figma.js
 ```
 
 ---
@@ -166,8 +196,12 @@ backend-api/
     middleware/  auth JWT, validasi Zod, error handler
     socket.js    Socket.io + JWT
   tests/         Jest + supertest
-user-app/src/    app/ (layar Expo Router), components/, ui/, services/, store/, lib/
+user-app/src/    app/ (layar Expo Router), components/, ui/, services/, store/, lib/, hooks/
 courier-app/src/ app/ (layar Expo Router), components/, ui/, services/, store/, lib/, hooks/
+scripts/         sync-ui.js, export-figma.js
 docs/            spesifikasi desain
-design & alur kerja sistem/   mockup dan catatan alur awal
+design & alur kerja sistem/
+  design/        mockup awal
+  design-v2/     ekspor desain dari Figma (hifi/, wireframe/)
+  alur-sistem.txt
 ```
