@@ -47,7 +47,7 @@ export function formatDayLabel(date: Date) {
 
 export function formatSchedule(iso: string) {
   const d = new Date(iso);
-  return `${formatDayLabel(d)}, ${d.getDate()} ${MONTHS[d.getMonth()]} • ${formatTime(iso)}`;
+  return `${formatDayLabel(d)}, ${d.getDate()} ${MONTHS[d.getMonth()]} · ${formatTime(iso)}`;
 }
 
 export function timeAgo(iso: string) {

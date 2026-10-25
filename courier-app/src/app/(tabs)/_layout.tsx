@@ -1,5 +1,5 @@
 import React from 'react';
-import { ColorValue, Platform } from 'react-native';
+import { ColorValue } from 'react-native';
 import { Tabs } from 'expo-router';
 import type { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,13 +21,14 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: { fontSize: 12, fontFamily: fonts.medium },
+        // Plus Jakarta Sans lebih tinggi dari font sistem: beri label ruang baris sendiri agar tidak terpotong.
+        tabBarLabelStyle: { fontSize: 12, lineHeight: 16, fontFamily: fonts.medium, marginTop: 2 },
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 60 + Math.max(insets.bottom, Platform.OS === 'android' ? 8 : 0),
-          paddingTop: 6,
-          paddingBottom: Math.max(insets.bottom, 8),
+          height: 64 + Math.max(insets.bottom, 10),
+          paddingTop: 8,
+          paddingBottom: Math.max(insets.bottom, 10),
         },
       }}
     >
