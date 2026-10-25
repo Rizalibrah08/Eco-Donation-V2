@@ -14,7 +14,8 @@ export interface MapHandle {
   setCenter: (pos: LatLng, zoom?: number) => void;
 }
 
-// HTML Leaflet mandiri (CDN unpkg, tile CARTO Voyager berbasis OpenStreetMap).
+// HTML Leaflet mandiri (CDN unpkg, tile OSM HOT tanpa API key; cadangan Esri bila gagal).
+// CARTO kini wajib API key, tile.openstreetmap.org memblokir WebView (tanpa Referer).
 // Komunikasi: RN → peta lewat window.__apply(cmd); peta → RN lewat postMessage.
 export function buildMapHtml({ center, zoom, picker, interactive }: { center: LatLng; zoom: number; picker: boolean; interactive: boolean }) {
   return `<!DOCTYPE html>
@@ -43,9 +44,17 @@ ${picker ? `<div id="center-shadow"></div><div id="center-pin"><div class="pin">
   var map = L.map('map', { zoomControl: false, attributionControl: true, dragging: INTERACTIVE, scrollWheelZoom: INTERACTIVE,
     touchZoom: INTERACTIVE, doubleClickZoom: INTERACTIVE, boxZoom: false, keyboard: false })
     .setView([${center.lat}, ${center.lng}], ${zoom});
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19, subdomains: 'abcd', attribution: '&copy; OpenStreetMap &copy; CARTO'
+  var tiles = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+    maxZoom: 19, subdomains: 'abc', attribution: '&copy; OpenStreetMap, HOT'
   }).addTo(map);
+  var tileErrors = 0;
+  tiles.on('tileerror', function () {
+    if (++tileErrors !== 4) return;
+    map.removeLayer(tiles);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution: '&copy; Esri, OpenStreetMap'
+    }).addTo(map);
+  });
 
   function send(msg) {
     var s = JSON.stringify(msg);

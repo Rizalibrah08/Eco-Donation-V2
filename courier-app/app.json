@@ -21,7 +21,7 @@
       ]
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -37,7 +37,9 @@
         {
           "locationWhenInUsePermission": "Izinkan Eco-Donation Kurir membagikan lokasi Anda kepada pengguna selama menuju titik penjemputan."
         }
-      ]
+      ],
+      "expo-image",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

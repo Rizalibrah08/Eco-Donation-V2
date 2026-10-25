@@ -15,7 +15,7 @@ Proyek tugas besar mata kuliah Pemrograman Mobile Lanjut.
 | `courier-app` | Aplikasi kurir: ambil tugas, navigasi, timbang, tampilkan QR | Expo SDK 56, Expo Router, Zustand, expo-location, react-native-qrcode-svg |
 | `scripts/sync-ui.js` | Menyalin design system `user-app/src/ui` ke `courier-app/src/ui` | Node.js |
 
-Kedua aplikasi berjalan di **Expo Go** (tanpa build native). Peta memakai Leaflet di dalam WebView dengan tile CARTO/OpenStreetMap, dan pencarian alamat memakai Photon API. Semuanya gratis, tanpa API key.
+Kedua aplikasi berjalan di **Expo Go** (tanpa build native). Peta memakai Leaflet di dalam WebView dengan tile OpenStreetMap HOT (cadangan Esri), dan pencarian alamat memakai Photon API. Semuanya gratis, tanpa API key.
 
 ```
 ┌──────────────┐   REST + WebSocket   ┌──────────────┐   REST + WebSocket   ┌──────────────┐
