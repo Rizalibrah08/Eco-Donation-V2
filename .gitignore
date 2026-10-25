@@ -45,3 +45,9 @@ backend-api/database.sqlite*
 
 # Design folder - not needed for running the app
 Desain & Konteks aplikasi/
+
+# Perkakas skill AI lokal (npx skills add), bukan bagian aplikasi
+.agents/
+.claude/
+.taste-skill/
+skills-lock.json
