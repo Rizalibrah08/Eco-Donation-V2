@@ -1,43 +1,38 @@
+import React from 'react';
+import { ColorValue, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors } from '../../ui';
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const icon = (active: IconName, idle: IconName) =>
+  function TabIcon({ color, focused }: { color: ColorValue; focused: boolean }) {
+    return <Ionicons name={focused ? active : idle} size={23} color={color} />;
+  };
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#1565c0',
-        tabBarInactiveTintColor: '#999',
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSubtle,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarStyle: {
-          borderTopWidth: 0,
-          elevation: 10,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.1,
-          shadowRadius: 5,
-          height: 60,
-          paddingBottom: 10,
-          paddingTop: 5,
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          height: 60 + Math.max(insets.bottom, Platform.OS === 'android' ? 8 : 0),
+          paddingTop: 6,
+          paddingBottom: Math.max(insets.bottom, 8),
         },
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Tugas',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'list' : 'list-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
-          ),
-        }}
-      />
+      }}
+    >
+      <Tabs.Screen name="index" options={{ title: 'Tugas', tabBarIcon: icon('bicycle', 'bicycle-outline') }} />
+      <Tabs.Screen name="riwayat" options={{ title: 'Riwayat', tabBarIcon: icon('time', 'time-outline') }} />
+      <Tabs.Screen name="profil" options={{ title: 'Profil', tabBarIcon: icon('person-circle', 'person-circle-outline') }} />
     </Tabs>
   );
 }

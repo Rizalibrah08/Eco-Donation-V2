@@ -6,6 +6,7 @@ export const brand = {
   primary: '#0E7C66',
   primaryDark: '#0A5C4C',
   primarySoft: '#E3F2EE',
+  primarySoftPressed: '#CFE8E1',
   primaryGradient: ['#0A5C4C', '#12A383'] as const,
   onPrimary: '#FFFFFF',
 };

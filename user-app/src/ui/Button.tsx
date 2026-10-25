@@ -20,7 +20,7 @@ export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> 
 
 const palette: Record<Variant, { bg: string; fg: string; border: string; pressed: string }> = {
   primary: { bg: colors.primary, fg: colors.onPrimary, border: colors.primary, pressed: colors.primaryDark },
-  secondary: { bg: colors.primarySoft, fg: colors.primaryDark, border: colors.primarySoft, pressed: '#CFE8E1' },
+  secondary: { bg: colors.primarySoft, fg: colors.primaryDark, border: colors.primarySoft, pressed: colors.primarySoftPressed },
   outline: { bg: colors.surface, fg: colors.text, border: colors.borderStrong, pressed: colors.surfaceAlt },
   ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent', pressed: colors.primarySoft },
   danger: { bg: colors.danger, fg: '#FFFFFF', border: colors.danger, pressed: '#B91C1C' },
