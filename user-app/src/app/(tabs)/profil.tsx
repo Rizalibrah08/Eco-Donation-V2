@@ -1,783 +1,240 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
-import ConfirmModal from '../../components/ConfirmModal';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useAuthStore } from '../../store/useAuthStore';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import type { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
-import Svg, { G, Circle } from 'react-native-svg';
+import { refreshMe } from '../../services/user';
+import { useAuthStore } from '../../store/auth';
+import {
+  Avatar, Card, Dialog, Divider, IconButton, ListRow, ProgressBar, Screen, SectionHeader, Text, category, colors, radius, spacing, Icon } from '../../ui';
+import { formatNumber } from '../../lib/format';
+import type { Badge, BadgeTier } from '../../lib/types';
 
-// Donut chart colors per category
-const DONUT_COLORS: Record<string, string> = {
-  'Botol Plastik': '#00bfa5',
-  'Kertas': '#ffb300',
-  'Kaleng': '#555',
-  'Botol Kaca': '#1565c0',
+const TIER: Record<BadgeTier, { label: string; color: string }> = {
+  bronze: { label: 'Perunggu', color: colors.bronze },
+  silver: { label: 'Perak', color: colors.silver },
+  gold: { label: 'Emas', color: colors.gold },
 };
 
-// Badge definitions
-const BADGE_DEFS = [
-  { key: 'eco_warrior', name: 'Eco Warrior', desc: 'Kumpulkan 50 Kg sampah yang didaur ulang.', target: 50, metric: 'total_kg', unit: 'Kg', icon: 'leaf-outline' as const, color: '#00bfa5', bg: '#e0f2f1' },
-  { key: 'recycling_hero', name: 'Recycling Hero', desc: 'Selesaikan 10 kali penyetoran sampah.', target: 10, metric: 'total_setor_count', unit: 'kali', icon: 'refresh-outline' as const, color: '#1565c0', bg: '#e3f2fd' },
-  { key: 'kind_heart', name: 'Kind Heart', desc: 'Lakukan donasi ke kampanye sebanyak 5 kali.', target: 5, metric: 'total_donasi_count', unit: 'kali', icon: 'heart' as const, color: '#e91e63', bg: '#fce4ec' },
-  { key: 'top_donor', name: 'Top Donor', desc: 'Berdonasi lebih dari 1.000 Poin.', target: 1000, metric: 'total_donations_rp', unit: 'Poin', icon: 'trophy-outline' as const, color: '#9e9e9e', bg: '#f5f5f5' },
-];
-
-const TIER_COLORS: Record<string, string> = {
-  gold: '#ffb300',
-  silver: '#9e9e9e',
-  bronze: '#cd7f32',
+const BADGE_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+  leaf: 'leaf-outline', refresh: 'sync-outline', heart: 'heart-outline', trophy: 'trophy-outline',
 };
 
-export default function ProfilScreen() {
-  const { user, logout } = useAuthStore();
+// Warna identitas pucat per orang di papan peringkat (bukan data), berurutan agar stabil.
+const PERSON_TINTS = [category.plastik, category.kaleng, category.kertas, category.kaca];
+
+interface Leaderboard {
+  entries: { rank: number; id: number; name: string; points: number }[];
+  me: { rank: number; points: number } | null;
+}
+
+function badgeProgressText(b: Badge) {
+  if (!b.tier && b.next_tier) return `${formatNumber(b.value, 1)} dari ${formatNumber(b.next_target)} ${b.unit} untuk membuka`;
+  if (b.next_tier) return `${formatNumber(b.value, 1)} dari ${formatNumber(b.next_target)} ${b.unit} menuju ${TIER[b.next_tier].label}`;
+  return `${formatNumber(b.value, 1)} ${b.unit} · tingkat tertinggi`;
+}
+
+export default function ProfileScreen() {
   const router = useRouter();
-  const [profileData, setProfileData] = useState<any>(null);
-  const [leaderboard, setLeaderboard] = useState<any[]>([]);
-  const [distribution, setDistribution] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [selectedBadge, setSelectedBadge] = useState<any>(null);
-  const [showBadgeModal, setShowBadgeModal] = useState(false);
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
+  const [badge, setBadge] = useState<Badge | null>(null);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const openBadgeModal = (badgeDef: any, earned: any) => {
-    setSelectedBadge({ def: badgeDef, earned });
-    setShowBadgeModal(true);
-  };
+  const load = useCallback(async () => {
+    const [lb] = await Promise.allSettled([
+      api.get<Leaderboard>('/leaderboard', { params: { limit: 5 } }),
+      refreshMe(),
+    ]);
+    if (lb.status === 'fulfilled') setLeaderboard(lb.value.data);
+  }, []);
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      if (!user) return;
-      try {
-        const [profileRes, lbRes, distRes] = await Promise.all([
-          api.get(`/users/${user.id}`),
-          api.get(`/users/${user.id}/leaderboard`),
-          api.get(`/users/${user.id}/distribution`),
-        ]);
-        setProfileData(profileRes.data);
-        setLeaderboard(lbRes.data);
-        setDistribution(distRes.data);
-      } catch (error) {
-        console.error('Failed to fetch profile data', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAll();
-  }, [user]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const handleLogout = () => {
-    setShowLogoutModal(true);
-  };
-
-  const handleConfirmLogout = () => {
-    setShowLogoutModal(false);
-    logout();
-    router.replace('/(auth)/login');
-  };
-
-  if (loading || !profileData) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#00bfa5" />
-      </View>
-    );
-  }
-
-  // Calculate user rank
-  const userRank = leaderboard.findIndex(u => u.id === user?.id) + 1 || '-';
-
-  // Distribution chart data
-  const totalWeight = distribution.reduce((sum, d) => sum + (d.total_weight || 0), 0);
-  const distWithPercent = distribution.map(d => ({
-    ...d,
-    percent: totalWeight > 0 ? Math.round((d.total_weight / totalWeight) * 100) : 0,
-    color: DONUT_COLORS[d.category] || '#ccc',
-  }));
-
-  // Rank icon
-  const getRankIcon = (rank: number) => {
-    if (rank === 1) return { name: 'trophy' as const, color: '#ffb300' };
-    if (rank === 2) return { name: 'trophy' as const, color: '#9e9e9e' };
-    if (rank === 3) return { name: 'trophy' as const, color: '#cd7f32' };
-    return null;
-  };
+  const badges = user?.badges || [];
+  const earned = badges.filter((b) => b.tier);
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <LinearGradient colors={['#004d40', '#00bfa5']} style={styles.header}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerName}>{profileData.name}</Text>
-            <Text style={styles.headerEmail}>{profileData.email}</Text>
-          </View>
-          <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push('/settings')}>
-            <Ionicons name="settings-outline" size={22} color="#fff" />
-          </TouchableOpacity>
+    <>
+      <Screen refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }}>
+        <View style={styles.header}>
+          <Text variant="title">Profil</Text>
+          <IconButton icon="settings-outline" size={44} accessibilityLabel="Edit profil" onPress={() => router.push('/settings')} />
         </View>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{profileData.total_setor_count || 0}</Text>
-            <Text style={styles.statLabel}>Total Setor</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{profileData.total_donasi_count || 0}</Text>
-            <Text style={styles.statLabel}>Donasi</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>#{userRank}</Text>
-            <Text style={styles.statLabel}>Peringkat</Text>
-          </View>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.content}>
-        {/* Impact Portfolio */}
-        <View style={styles.card}>
-          <View style={styles.cardTitleRow}>
-            <Ionicons name="ribbon-outline" size={20} color="#00bfa5" />
-            <Text style={styles.cardTitle}>Impact Portfolio</Text>
-          </View>
-          <View style={styles.impactRow}>
-            <View style={styles.impactItem}>
-              <View style={[styles.impactIcon, { backgroundColor: '#e8f5e9' }]}>
-                <Ionicons name="people-outline" size={22} color="#2e7d32" />
-              </View>
-              <Text style={styles.impactValue}>{(profileData.total_kg || 0).toFixed(1)}</Text>
-              <Text style={styles.impactLabel}>Kg Sampah</Text>
+        <Card style={styles.identity} padded={false}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Edit profil" onPress={() => router.push('/settings')}
+            style={({ pressed }) => [styles.identityRow, pressed && { backgroundColor: colors.surfaceAlt }]}>
+            <Avatar name={user?.name} size={56} color={colors.primary} />
+            <View style={styles.flex}>
+              <Text variant="heading" numberOfLines={1}>{user?.name}</Text>
+              <Text variant="bodySmall" tone="muted" numberOfLines={1}>{user?.email}</Text>
             </View>
-            <View style={styles.impactItem}>
-              <View style={[styles.impactIcon, { backgroundColor: '#e0f2f1' }]}>
-                <Ionicons name="leaf-outline" size={22} color="#00695c" />
-              </View>
-              <Text style={styles.impactValue}>{(profileData.total_co2 || 0).toFixed(1)}</Text>
-              <Text style={styles.impactLabel}>Kg CO₂</Text>
-            </View>
-            <View style={styles.impactItem}>
-              <View style={[styles.impactIcon, { backgroundColor: '#fce4ec' }]}>
-                <Ionicons name="heart" size={22} color="#c2185b" />
-              </View>
-              <Text style={styles.impactValue}>{profileData.total_donations_rp || 0}</Text>
-              <Text style={styles.impactLabel}>Poin Donasi</Text>
-            </View>
+            <Icon name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+          <Divider style={styles.inset} />
+          <View style={styles.stats}>
+            <Stat value={formatNumber(user?.total_setor_count)} label="Setoran" />
+            <View style={styles.vRule} />
+            <Stat value={formatNumber(user?.total_donasi_count)} label="Donasi" />
+            <View style={styles.vRule} />
+            <Stat value={leaderboard?.me ? `#${leaderboard.me.rank}` : '—'} label="Peringkat" />
           </View>
+        </Card>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Text variant="heading">Lencana</Text>
+            <Text variant="bodySmall" tone="muted">{earned.length} dari {badges.length} diraih</Text>
+          </View>
+          <Card padded={false}>
+            {badges.map((b, i) => (
+              <View key={b.key}>
+                {i > 0 && <Divider style={styles.inset} />}
+                <Pressable accessibilityRole="button" accessibilityLabel={`Lencana ${b.name}`} onPress={() => setBadge(b)}
+                  style={({ pressed }) => [styles.badgeRow, pressed && { backgroundColor: colors.surfaceAlt }]}>
+                  <View style={[styles.medal, { borderColor: b.tier ? TIER[b.tier].color : colors.borderStrong }]}>
+                    <Icon name={BADGE_ICON[b.icon] || 'ribbon-outline'} size={20} color={b.tier ? colors.text : colors.textMuted} />
+                  </View>
+                  <View style={styles.flex}>
+                    <View style={styles.badgeTitle}>
+                      <Text variant="subheading" tone={b.tier ? 'default' : 'muted'} numberOfLines={1} style={styles.flex}>{b.name}</Text>
+                      <View style={styles.tierChip}>
+                        <Text variant="caption">{b.tier ? TIER[b.tier].label : 'Terkunci'}</Text>
+                      </View>
+                    </View>
+                    <ProgressBar value={b.progress} height={4} color={colors.text} style={styles.badgeBar} />
+                    <Text variant="caption" tone="muted">{badgeProgressText(b)}</Text>
+                  </View>
+                </Pressable>
+              </View>
+            ))}
+          </Card>
         </View>
 
-        {/* Distribusi Sampah */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Distribusi Sampah</Text>
-          {totalWeight > 0 ? (
-            <>
-              <View style={styles.donutContainer}>
-                <View style={styles.svgWrapper}>
-                  <Svg height="150" width="150" viewBox="0 0 160 160">
-                    <G transform="rotate(-90, 80, 80)">
-                      {distWithPercent.map((d, i) => {
-                        const previousPercents = distWithPercent.slice(0, i).reduce((sum, item) => sum + item.percent, 0);
-                        const radius = 60;
-                        const circumference = 2 * Math.PI * radius;
-                        const strokeDashoffset = circumference - (d.percent / 100) * circumference;
-                        const strokeDasharray = `${circumference} ${circumference}`;
-                        const rotation = (previousPercents / 100) * 360;
-
-                        return (
-                          <Circle
-                            key={i}
-                            cx="80"
-                            cy="80"
-                            r={radius}
-                            stroke={d.color}
-                            strokeWidth="20"
-                            fill="transparent"
-                            strokeDasharray={strokeDasharray}
-                            strokeDashoffset={strokeDashoffset}
-                            transform={`rotate(${rotation}, 80, 80)`}
-                          />
-                        );
-                      })}
-                    </G>
-                  </Svg>
-                  <View style={[StyleSheet.absoluteFill, styles.donutCenter]}>
-                    <Text style={styles.donutTotal}>{totalWeight.toFixed(1)}</Text>
-                    <Text style={styles.donutUnit}>Kg</Text>
-                  </View>
-                </View>
-              </View>
-              <View style={styles.legendContainer}>
-                {distWithPercent.map((d, i) => (
-                  <View key={i} style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: d.color }]} />
-                    <Text style={styles.legendText}>{d.category} ({d.percent}%)</Text>
-                  </View>
-                ))}
-              </View>
-            </>
-          ) : (
-            <Text style={styles.emptyText}>Belum ada data setoran.</Text>
-          )}
-        </View>
-
-        {/* Lencana & Pencapaian */}
-        <View style={styles.card}>
-          <View style={styles.cardTitleRow}>
-            <Ionicons name="ribbon" size={20} color="#ffb300" />
-            <Text style={styles.cardTitle}>Lencana & Pencapaian</Text>
-          </View>
-          <View style={styles.badgesRow}>
-            {BADGE_DEFS.map((def) => {
-              const earned = profileData.badges?.find((b: any) => b.name === def.name);
-              return (
-                <TouchableOpacity 
-                  key={def.key} 
-                  style={styles.badgeItem}
-                  onPress={() => openBadgeModal(def, earned)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.badgeCircle, { backgroundColor: earned ? def.bg : '#f5f5f5' }]}>
-                    <Ionicons 
-                      name={def.icon} 
-                      size={28} 
-                      color={earned ? def.color : '#ccc'} 
-                    />
-                  </View>
-                  <Text style={[styles.badgeName, !earned && { color: '#ccc' }]}>{def.name}</Text>
-                  {earned && (
-                    <Text style={[styles.badgeTier, { color: TIER_COLORS[earned.tier] || '#999' }]}>
-                      {earned.tier.charAt(0).toUpperCase() + earned.tier.slice(1)}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              );
+        <View style={styles.section}>
+          <SectionHeader title="Papan peringkat" />
+          <Card padded={false} style={styles.board}>
+            {(leaderboard?.entries || []).map((e, i) => {
+              const me = e.id === user?.id;
+              return <RankRow key={e.id} rank={e.rank} name={me ? `${e.name} (Anda)` : e.name} points={e.points} me={me} tint={i} />;
             })}
-          </View>
+            {leaderboard?.me && !leaderboard.entries.some((e) => e.id === user?.id) && (
+              <RankRow rank={leaderboard.me.rank} name="Anda" points={leaderboard.me.points} me tint={0} />
+            )}
+          </Card>
         </View>
 
-        {/* Papan Peringkat Komunitas */}
-        <View style={styles.card}>
-          <View style={styles.cardTitleRow}>
-            <Ionicons name="star-outline" size={20} color="#ffb300" />
-            <Text style={styles.cardTitle}>Papan Peringkat Komunitas</Text>
-          </View>
-          {leaderboard.map((entry, index) => {
-            const rank = index + 1;
-            const isMe = entry.id === user?.id;
-            const rankIcon = getRankIcon(rank);
-
-            return (
-              <View 
-                key={entry.id} 
-                style={[styles.lbRow, isMe && styles.lbRowMe]}
-              >
-                <View style={styles.lbRankContainer}>
-                  {rankIcon ? (
-                    <Ionicons name={rankIcon.name} size={20} color={rankIcon.color} />
-                  ) : (
-                    <Text style={styles.lbRankNum}>{rank}</Text>
-                  )}
-                </View>
-                <Text style={[styles.lbName, isMe && styles.lbNameMe]}>
-                  {entry.name}{isMe ? ' (Kamu)' : ''}
-                </Text>
-                <Text style={styles.lbPoints}>
-                  {(entry.points || 0).toLocaleString('id-ID')} poin
-                </Text>
-              </View>
-            );
-          })}
-          {leaderboard.length === 0 && (
-            <Text style={styles.emptyText}>Belum ada data peringkat.</Text>
-          )}
+        <View style={styles.section}>
+          <SectionHeader title="Akun" />
+          <Card padded={false}>
+            <ListRow icon="create-outline" title="Edit profil & kata sandi" onPress={() => router.push('/settings')} />
+            <Divider style={styles.inset} />
+            <ListRow icon="notifications-outline" title="Notifikasi" onPress={() => router.push('/notifications')} />
+            <Divider style={styles.inset} />
+            <ListRow icon="help-circle-outline" title="Pusat bantuan" onPress={() => router.push('/help')} />
+            <Divider style={styles.inset} />
+            <ListRow icon="log-out-outline" title="Keluar" danger onPress={() => setConfirmLogout(true)} />
+          </Card>
+          <Text variant="caption" tone="muted" align="center" style={styles.version}>Eco-Donation v1.0.0</Text>
         </View>
+      </Screen>
 
-        {/* Menu Footer */}
-        <View style={styles.menuCard}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings')}>
-            <Ionicons name="settings-outline" size={20} color="#666" />
-            <Text style={styles.menuText}>Pengaturan Akun</Text>
-            <Ionicons name="chevron-forward" size={20} color="#ccc" />
-          </TouchableOpacity>
-          <View style={styles.menuDivider} />
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/help')}>
-            <Ionicons name="help-circle-outline" size={20} color="#666" />
-            <Text style={styles.menuText}>Pusat Bantuan</Text>
-            <Ionicons name="chevron-forward" size={20} color="#ccc" />
-          </TouchableOpacity>
-          <View style={styles.menuDivider} />
-          <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={20} color="#ff5252" />
-            <Text style={[styles.menuText, { color: '#ff5252' }]}>Keluar</Text>
-            <Ionicons name="chevron-forward" size={20} color="#ff5252" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ height: 100 }} />
-      </View>
-
-      <ConfirmModal
-        visible={showLogoutModal}
-        title="Konfirmasi Keluar"
-        message="Apakah Anda yakin ingin keluar dari akun ini?"
-        confirmText="Keluar"
-        isDestructive={true}
-        onConfirm={handleConfirmLogout}
-        onCancel={() => setShowLogoutModal(false)}
-      />
-
-      {/* Badge Modal */}
-      <Modal
-        visible={showBadgeModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowBadgeModal(false)}
+      <Dialog
+        visible={!!badge}
+        tone="primary"
+        icon={badge ? BADGE_ICON[badge.icon] || 'ribbon-outline' : 'ribbon-outline'}
+        title={badge?.name || ''}
+        message={badge?.description}
+        confirmLabel="Tutup"
+        onConfirm={() => setBadge(null)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedBadge && (
+        {badge && (
+          <View style={styles.badgeDetail}>
+            <Text variant="bodySmall" tone="muted" align="center">
+              Pencapaian Anda: <Text variant="bodySmall" weight="600">{formatNumber(badge.value, 1)} {badge.unit}</Text>
+            </Text>
+            {badge.next_tier ? (
               <>
-                <View style={[styles.modalBadgeCircle, { backgroundColor: selectedBadge.earned ? selectedBadge.def.bg : '#f5f5f5' }]}>
-                  <Ionicons 
-                    name={selectedBadge.def.icon} 
-                    size={48} 
-                    color={selectedBadge.earned ? selectedBadge.def.color : '#ccc'} 
-                  />
-                </View>
-                <Text style={styles.modalBadgeName}>{selectedBadge.def.name}</Text>
-                
-                {selectedBadge.earned ? (
-                  <View style={styles.earnedBadge}>
-                    <Ionicons name="checkmark-circle" size={20} color="#00bfa5" />
-                    <Text style={styles.earnedText}>Lencana Didapatkan!</Text>
-                  </View>
-                ) : (
-                  <View style={styles.lockedBadge}>
-                    <Ionicons name="lock-closed" size={16} color="#888" />
-                    <Text style={styles.lockedText}>Lencana Terkunci</Text>
-                  </View>
-                )}
-
-                <Text style={styles.modalBadgeDesc}>{selectedBadge.def.desc}</Text>
-
-                {!selectedBadge.earned && (
-                  <View style={styles.progressContainer}>
-                    <View style={styles.progressHeader}>
-                      <Text style={styles.progressLabel}>Progress</Text>
-                      <Text style={styles.progressValue}>
-                        {Math.min(profileData[selectedBadge.def.metric] || 0, selectedBadge.def.target)} / {selectedBadge.def.target} {selectedBadge.def.unit}
-                      </Text>
-                    </View>
-                    <View style={styles.progressBarBg}>
-                      <View 
-                        style={[
-                          styles.progressBarFill, 
-                          { width: `${Math.min(((profileData[selectedBadge.def.metric] || 0) / selectedBadge.def.target) * 100, 100)}%` }
-                        ]} 
-                      />
-                    </View>
-                  </View>
-                )}
-
-                <TouchableOpacity 
-                  style={styles.modalCloseBtn} 
-                  onPress={() => setShowBadgeModal(false)}
-                >
-                  <Text style={styles.modalCloseText}>Tutup</Text>
-                </TouchableOpacity>
+                <ProgressBar value={badge.progress} style={{ marginTop: spacing.md }} color={colors.text} />
+                <Text variant="caption" tone="muted" align="center" style={{ marginTop: spacing.sm }}>
+                  {formatNumber(badge.next_target)} {badge.unit} untuk tingkat {TIER[badge.next_tier].label}
+                </Text>
               </>
+            ) : (
+              <Text variant="caption" tone="success" weight="600" align="center" style={{ marginTop: spacing.sm }}>
+                Tingkat tertinggi tercapai
+              </Text>
             )}
           </View>
-        </View>
-      </Modal>
-    </ScrollView>
+        )}
+      </Dialog>
+
+      <Dialog
+        visible={confirmLogout}
+        tone="danger"
+        icon="log-out-outline"
+        title="Keluar dari akun?"
+        message="Anda perlu masuk kembali untuk menyetor sampah dan berdonasi."
+        cancelLabel="Batal"
+        confirmLabel="Keluar"
+        destructive
+        onCancel={() => setConfirmLogout(false)}
+        onConfirm={() => { setConfirmLogout(false); logout(); }}
+      />
+    </>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text variant="heading" tabular style={styles.statValue}>{value}</Text>
+      <Text variant="caption" tone="muted">{label}</Text>
+    </View>
+  );
+}
+
+function RankRow({ rank, name, points, me, tint }: { rank: number; name: string; points: number; me: boolean; tint: number }) {
+  const t = me ? { bg: colors.primarySoft, ink: colors.primary } : PERSON_TINTS[(tint - 1 + PERSON_TINTS.length) % PERSON_TINTS.length];
+  const initials = name.replace(' (Anda)', '').split(' ').filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+  return (
+    <View style={[styles.rank, me && styles.rankMe]}>
+      <Text variant="subheading" tone="muted" tabular style={styles.rankNo}>{rank}</Text>
+      <View style={[styles.rankAvatar, { backgroundColor: me ? colors.surface : t.bg }]}>
+        <Text variant="caption" weight="600" style={{ color: t.ink }}>{initials}</Text>
+      </View>
+      <Text variant="subheading" style={styles.flex} numberOfLines={1}>{name}</Text>
+      <Text variant="subheading" tabular>{formatNumber(points)}</Text>
+      <Text variant="caption" tone="muted">poin</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Header
-  header: {
-    paddingTop: 60,
-    paddingBottom: 25,
-    paddingHorizontal: 25,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 25,
-  },
-  headerName: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  headerEmail: {
-    fontSize: 14,
-    color: '#b2dfdb',
-  },
-  settingsBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginHorizontal: 4,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#b2dfdb',
-  },
-  // Content
-  content: {
-    padding: 16,
-    marginTop: -10,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-  },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginLeft: 8,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 18,
-  },
-  // Impact Portfolio
-  impactRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  impactItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  impactIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  impactValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 2,
-  },
-  impactLabel: {
-    fontSize: 12,
-    color: '#888',
-  },
-  // Donut Chart
-  donutContainer: {
-    alignItems: 'center',
-    marginVertical: 15,
-  },
-  svgWrapper: {
-    width: 150,
-    height: 150,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  donutCenter: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  donutTotal: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  donutUnit: {
-    fontSize: 12,
-    color: '#888',
-  },
-  legendContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    marginTop: 10,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 10,
-    marginVertical: 4,
-  },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 13,
-    color: '#555',
-  },
-  // Badges
-  badgesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  badgeItem: {
-    alignItems: 'center',
-    width: '23%',
-  },
-  badgeCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  badgeName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  badgeTier: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  // Leaderboard
-  lbRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
-  },
-  lbRowMe: {
-    backgroundColor: '#e0f7f4',
-    borderRadius: 12,
-    borderBottomWidth: 0,
-    borderWidth: 1,
-    borderColor: '#b2dfdb',
-    paddingHorizontal: 12,
-    marginVertical: 2,
-  },
-  lbRankContainer: {
-    width: 30,
-    alignItems: 'center',
-  },
-  lbRankNum: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#888',
-  },
-  lbName: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333',
-    marginLeft: 12,
-    fontWeight: '500',
-  },
-  lbNameMe: {
-    color: '#00695c',
-    fontWeight: 'bold',
-  },
-  lbPoints: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '600',
-  },
-  // Menu
-  menuCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    paddingHorizontal: 20,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 18,
-  },
-  menuText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333',
-    marginLeft: 15,
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#999',
-    fontSize: 14,
-    paddingVertical: 20,
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-  },
-  modalBadgeCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalBadgeName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  earnedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e8f5e9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 16,
-  },
-  earnedText: {
-    color: '#2e7d32',
-    fontWeight: 'bold',
-    marginLeft: 6,
-    fontSize: 14,
-  },
-  lockedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 16,
-  },
-  lockedText: {
-    color: '#888',
-    fontWeight: 'bold',
-    marginLeft: 6,
-    fontSize: 14,
-  },
-  modalBadgeDesc: {
-    fontSize: 15,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 22,
-  },
-  progressContainer: {
-    width: '100%',
-    marginBottom: 24,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  progressLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#555',
-  },
-  progressValue: {
-    fontSize: 14,
-    color: '#00bfa5',
-    fontWeight: 'bold',
-  },
-  progressBarBg: {
-    width: '100%',
-    height: 10,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 5,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#00bfa5',
-    borderRadius: 5,
-  },
-  modalCloseBtn: {
-    width: '100%',
-    paddingVertical: 14,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  modalCloseText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#555',
-  },
+  flex: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xl },
+  identity: { overflow: 'hidden' },
+  identityRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: spacing.xl },
+  inset: { marginHorizontal: spacing.lg },
+  stats: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.lg },
+  stat: { flex: 1, alignItems: 'center', gap: 2 },
+  statValue: { fontSize: 20, lineHeight: 26 },
+  vRule: { width: 1, height: 36, backgroundColor: colors.rule },
+  section: { marginTop: spacing.xxl },
+  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 14 },
+  medal: { width: 44, height: 44, borderRadius: 22, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center' },
+  badgeTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  tierChip: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt },
+  badgeBar: { marginTop: 6, marginBottom: 6 },
+  badgeDetail: { alignSelf: 'stretch', marginTop: spacing.lg },
+  board: { padding: spacing.sm },
+  rank: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, paddingVertical: 10, borderRadius: radius.md },
+  rankMe: { backgroundColor: colors.primarySoft },
+  rankNo: { width: 20, textAlign: 'center' },
+  rankAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  version: { marginTop: spacing.xl },
 });

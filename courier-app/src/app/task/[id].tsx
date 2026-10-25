@@ -1,641 +1,551 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
-import ConfirmModal from '../../components/ConfirmModal';
-import SuccessModal from '../../components/SuccessModal';
-import WarningModal from '../../components/WarningModal';
-import ErrorModal from '../../components/ErrorModal';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import api from '../../services/api';
-import { useAuthStore } from '../../store/useAuthStore';
-import { Camera, CameraView } from 'expo-camera';
+import type { Ionicons } from '@expo/vector-icons';
+import QRCode from 'react-native-qrcode-svg';
+import api, { getErrorCode, getErrorMessage } from '../../services/api';
+import { useSocketEvent } from '../../services/socket';
+import { useLocationSharing, SharingState } from '../../hooks/useLocationSharing';
+import { LeafletMap, MapMarker } from '../../components/LeafletMap';
+import { InitialsAvatar } from '../../components/TaskCard';
+import {
+  AppBar, Button, Card, CategoryTile, Dialog, Divider, EmptyState, IconButton, Pill, Screen, Skeleton, Text,
+  colors, fonts, radius, spacing, toast, Icon } from '../../ui';
+import { STATUS, mapsUrl, totalKg } from '../../lib/status';
+import { formatDateTime, formatNumber, formatSchedule } from '../../lib/format';
+import type { PickupOrder, VerificationCode } from '../../lib/types';
+
+const STEP = 0.5;
+const MAX_KG = 500;
+
+const parseKg = (v: string) => Number(v.replace(',', '.'));
 
 export default function TaskDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const orderId = Number(id);
   const router = useRouter();
+  const [order, setOrder] = useState<PickupOrder | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [weights, setWeights] = useState<Record<number, string>>({});
+  const [reweigh, setReweigh] = useState(false);
+  const [verif, setVerif] = useState<VerificationCode | null>(null);
+  const [releaseOpen, setReleaseOpen] = useState(false);
+  const codeRequested = useRef(false);
 
-  const [task, setTask] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showWeighConfirmModal, setShowWeighConfirmModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-
-  // State for actual weights input
-  const [actualWeights, setActualWeights] = useState<Record<string, string>>({});
-  const [qrToken, setQrToken] = useState<string | null>(null);
-
-  // Scanner & Token states
-  const [showScanner, setShowScanner] = useState(false);
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
-  const [showTokenInput, setShowTokenInput] = useState(false);
-  const [tokenInput, setTokenInput] = useState('');
-  
-  const [showWarning, setShowWarning] = useState(false);
-  const [warningMessage, setWarningMessage] = useState('');
-  const [showError, setShowError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  useEffect(() => {
-    fetchTaskDetail();
-  }, [id]);
-
-  const fetchTaskDetail = async () => {
+  const load = useCallback(async () => {
     try {
-      const response = await api.get(`/pickups/${id}`);
-      setTask(response.data);
+      const { data } = await api.get<PickupOrder>(`/pickups/${orderId}`);
+      setOrder(data);
+      setError(null);
+      setWeights((w) => {
+        const next = { ...w };
+        for (const i of data.items) {
+          if (next[i.id] === undefined) next[i.id] = String(i.actual_weight ?? i.estimated_weight);
+        }
+        return next;
+      });
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }, [orderId]);
 
-      if (response.data.status === 'pending_verification') {
-        // Just flag that it has qr_token so UI shows options
-        setQrToken('pending');
-      }
-    } catch (error) {
-      setErrorMessage('Gagal memuat tugas.');
-      setShowError(true);
-      if (router.canGoBack()) {
+  useEffect(() => { load(); }, [load]);
+
+  useSocketEvent(['order:rejected', 'order:cancelled', 'order:completed', 'order:taken'], (p) => {
+    if (p?.orderId !== orderId) return;
+    setVerif(null);
+    codeRequested.current = false;
+    load();
+  });
+
+  const sharing = useLocationSharing(orderId, order?.status === 'on_the_way');
+  const rates = useRates();
+
+  const newCode = useCallback(async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post<VerificationCode>(`/pickups/${orderId}/code`, {});
+      setVerif(data);
+    } catch (err) {
+      toast.error('Gagal membuat kode', getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [orderId]);
+
+  // Kode hanya disimpan dalam bentuk hash di server, jadi saat layar dibuka ulang
+  // pada status menunggu persetujuan, kurir otomatis membuat kode baru untuk ditampilkan.
+  useEffect(() => {
+    if (order?.status === 'pending_verification' && !verif && !reweigh && !codeRequested.current) {
+      codeRequested.current = true;
+      newCode();
+    }
+  }, [order?.status, verif, reweigh, newCode]);
+
+  const run = async (action: () => Promise<void>, failTitle: string) => {
+    setBusy(true);
+    try {
+      await action();
+    } catch (err) {
+      if (getErrorCode(err) === 'ALREADY_TAKEN') {
+        toast.error('Sudah diambil', 'Order ini sudah diambil kurir lain.');
         router.back();
       } else {
-        router.replace('/(tabs)');
+        toast.error(failTitle, getErrorMessage(err));
       }
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
-  const handleAcceptTask = () => {
-    setShowConfirmModal(true);
-  };
+  const accept = () =>
+    run(async () => {
+      const { data } = await api.post<PickupOrder>(`/pickups/${orderId}/accept`, {});
+      setOrder(data);
+      toast.success('Tugas diambil', 'Lokasi Anda dibagikan ke pengguna selama perjalanan.');
+    }, 'Gagal mengambil tugas');
 
-  const handleConfirmAccept = async () => {
-    setShowConfirmModal(false);
-    setProcessing(true);
-    try {
-      const { user } = useAuthStore.getState();
-      await api.patch(`/pickups/${id}/status`, { status: 'on_the_way', courier_id: user?.id });
-      setWarningMessage('Tugas berhasil diterima! Segera menuju lokasi pengguna.');
-      setShowWarning(true); // Using warning modal simply as a non-points info
-      fetchTaskDetail(); // Refresh data
-    } catch (error) {
-      setErrorMessage('Tidak dapat menerima tugas.');
-      setShowError(true);
-    } finally {
-      setProcessing(false);
-    }
-  };
+  const arrive = () =>
+    run(async () => {
+      const { data } = await api.post<PickupOrder>(`/pickups/${orderId}/arrive`, {});
+      setOrder(data);
+    }, 'Gagal memperbarui status');
 
-  const handleUpdateWeight = (itemId: number, weight: string) => {
-    setActualWeights(prev => ({
-      ...prev,
-      [itemId]: weight
-    }));
-  };
+  const invalidWeight = order?.items.some((i) => {
+    const v = parseKg(weights[i.id] ?? '');
+    return !(v > 0 && v <= MAX_KG);
+  });
 
-  const handleGenerateQRPress = () => {
-    const items = task.items.map((item: any) => ({
-      id: item.id,
-      actual_weight: parseFloat(actualWeights[item.id] || '0')
-    }));
+  const weigh = () =>
+    run(async () => {
+      if (!order) return;
+      const items = order.items.map((i) => ({ id: i.id, actual_weight: parseKg(weights[i.id]) }));
+      const { data } = await api.post<VerificationCode>(`/pickups/${orderId}/weigh`, { items });
+      setVerif(data);
+      codeRequested.current = true;
+      setReweigh(false);
+      await load();
+    }, 'Gagal menyimpan timbangan');
 
-    const invalid = items.some((i: any) => isNaN(i.actual_weight) || i.actual_weight <= 0);
-    if (invalid) {
-      setWarningMessage('Silakan masukkan berat aktual (Kg) untuk semua barang.');
-      setShowWarning(true);
-      return;
-    }
+  const release = () =>
+    run(async () => {
+      await api.post(`/pickups/${orderId}/cancel`, {});
+      setReleaseOpen(false);
+      toast.info('Tugas dilepas', 'Order dikembalikan ke daftar tersedia.');
+      router.back();
+    }, 'Gagal melepas tugas');
 
-    setShowWeighConfirmModal(true);
-  };
+  const markers = useMemo<MapMarker[]>(
+    () => (order ? [{ id: 'pickup', kind: 'pickup', lat: order.pickup_lat, lng: order.pickup_lng }] : []),
+    [order],
+  );
 
-  const handleGenerateQR = async () => {
-    setShowWeighConfirmModal(false);
-    setProcessing(true);
-    try {
-      const items = task.items.map((item: any) => ({
-        id: item.id,
-        actual_weight: parseFloat(actualWeights[item.id] || '0')
-      }));
-      const response = await api.post(`/pickups/${id}/weigh`, { items });
-      setQrToken('pending');
-      setWarningMessage('Data terkirim ke User. Silakan minta User menampilkan QR atau Token untuk diverifikasi.');
-      setShowWarning(true);
-      fetchTaskDetail();
-    } catch (error) {
-      setErrorMessage('Tidak dapat memproses berat aktual.');
-      setShowError(true);
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const openScanner = async () => {
-    const { status } = await Camera.requestCameraPermissionsAsync();
-    setHasCameraPermission(status === 'granted');
-    if (status === 'granted') {
-      setShowScanner(true);
-    } else {
-      setErrorMessage('Akses kamera dibutuhkan untuk scan QR.');
-      setShowError(true);
-    }
-  };
-
-  const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    setShowScanner(false);
-    verifyToken(data);
-  };
-
-  const handleInputToken = () => {
-    if (!tokenInput.trim()) {
-      setWarningMessage('Silakan masukkan token verifikasi.');
-      setShowWarning(true);
-      return;
-    }
-    verifyToken(tokenInput.trim());
-  };
-
-  const verifyToken = async (tokenStr: string) => {
-    setProcessing(true);
-    try {
-      let finalToken = tokenStr;
-      let orderIdFromToken = null;
-      try {
-        const parsed = JSON.parse(tokenStr);
-        if (parsed.token) finalToken = parsed.token;
-        if (parsed.order_id) orderIdFromToken = parsed.order_id;
-      } catch (e) { }
-
-      if (orderIdFromToken && String(orderIdFromToken) !== String(id)) {
-        setErrorMessage('QR Code ini untuk tugas penjemputan yang berbeda.');
-        setProcessing(false);
-        setShowTokenInput(false);
-        setShowError(true);
-        return;
-      }
-
-      const response = await api.post(`/pickups/${id}/verify`, { token: finalToken });
-      setShowSuccessModal(true);
-    } catch (error: any) {
-      setErrorMessage(error.response?.data?.error || 'Token tidak valid atau sudah kadaluarsa.');
-      setShowError(true);
-    } finally {
-      setProcessing(false);
-      setShowTokenInput(false);
-    }
-  };
-
-  if (loading || !task) {
+  if (error && !order) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#1565c0" />
-      </View>
+      <Screen header={<AppBar title="Detail tugas" />}>
+        <EmptyState icon="alert-circle-outline" title="Tidak dapat memuat" message={error} actionLabel="Coba lagi" onAction={load} />
+      </Screen>
+    );
+  }
+
+  if (!order) {
+    return (
+      <Screen header={<AppBar title="Detail tugas" />}>
+        <Skeleton height={200} radius={radius.lg} />
+        <Skeleton height={160} radius={radius.lg} style={{ marginTop: spacing.lg }} />
+      </Screen>
+    );
+  }
+
+  const s = STATUS[order.status];
+  const weighing = order.status === 'arrived' || (order.status === 'pending_verification' && reweigh);
+  const showQr = order.status === 'pending_verification' && !reweigh;
+  const showMap = order.status === 'waiting' || order.status === 'on_the_way';
+  const canRelease = order.status === 'on_the_way' || order.status === 'arrived';
+  const userName = order.user_name || 'Pengguna';
+  const hasActual = order.items.every((i) => i.actual_weight != null);
+  const weighedKg = order.items.reduce((sum, i) => sum + (parseKg(weights[i.id] ?? '') || 0), 0);
+  const weighedPoints = rates
+    ? order.items.reduce((sum, i) => sum + (pointsFor(rates, i.category, parseKg(weights[i.id] ?? '') || 0) ?? 0), 0)
+    : null;
+
+  let footer: React.ReactNode;
+  if (order.status === 'waiting') {
+    footer = <Button title="Ambil tugas ini" icon="hand-right-outline" size="lg" loading={busy} onPress={accept} />;
+  } else if (order.status === 'on_the_way') {
+    footer = <Button title="Saya sudah tiba" icon="location-outline" size="lg" loading={busy} onPress={arrive} />;
+  } else if (weighing) {
+    footer = (
+      <Button title="Simpan & tampilkan QR" icon="qr-code-outline" size="lg" loading={busy} disabled={invalidWeight}
+        onPress={weigh} />
     );
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace('/(tabs)');
-          }
-        }}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Detail Tugas #{task.id}</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <>
+      <Screen
+        header={
+          <AppBar
+            title={`Order #${order.id}`}
+            subtitle={formatSchedule(order.scheduled_at)}
+            right={canRelease ? (
+              <IconButton icon="ellipsis-horizontal" accessibilityLabel="Lepas tugas" onPress={() => setReleaseOpen(true)} />
+            ) : undefined}
+          />
+        }
+        footer={footer}
+      >
+        <View style={styles.statusRow}>
+          <Pill label={s.label} tone={s.tone} />
+          {order.status === 'on_the_way' && <SharingBadge state={sharing} />}
+        </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {qrToken ? (
-          <View style={styles.qrContainer}>
-            <Text style={styles.qrTitle}>Verifikasi dari Pengguna</Text>
-            <Ionicons name="qr-code-outline" size={80} color="#1565c0" style={{ marginBottom: 20 }} />
-            <Text style={styles.qrInstruction}>
-              Pengguna telah menerima rincian berat di aplikasinya. Silakan Scan QR Code dari layar Pengguna, atau masukkan Token secara manual.
-            </Text>
+        {showQr && (
+          <QrPanel verif={verif} busy={busy} onNewCode={newCode}
+            onReweigh={() => { setReweigh(true); setVerif(null); }} />
+        )}
 
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#1565c0', width: '100%', marginTop: 20 }]}
-              onPress={openScanner}
-            >
-              <Text style={styles.actionButtonText}>Scan QR Code</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#e65100', width: '100%', marginTop: 15 }]}
-              onPress={() => setShowTokenInput(true)}
-            >
-              <Text style={styles.actionButtonText}>Masukkan Token</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <View style={styles.infoCard}>
-              <Text style={styles.sectionTitle}>Informasi Penjemputan</Text>
-
-              <View style={styles.infoRow}>
-                <Ionicons name="person" size={20} color="#1565c0" style={styles.infoIcon} />
-                <View>
-                  <Text style={styles.infoLabel}>Pengguna</Text>
-                  <Text style={styles.infoValue}>{task.user_name}</Text>
-                </View>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Ionicons name="location" size={20} color="#1565c0" style={styles.infoIcon} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.infoLabel}>Alamat</Text>
-                  <Text style={styles.infoValue}>{task.pickup_address}</Text>
-                </View>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Ionicons name="information-circle" size={20} color="#1565c0" style={styles.infoIcon} />
-                <View>
-                  <Text style={styles.infoLabel}>Status</Text>
-                  <Text style={[styles.infoValue, {
-                    color: task.status === 'on_the_way' ? '#e65100' :
-                      task.status === 'pending_verification' ? '#ffb300' : '#1565c0'
-                  }]}>
-                    {task.status === 'waiting' ? 'Menunggu Penjemputan' :
-                      task.status === 'pending_verification' ? 'Menunggu Verifikasi QR' : 'Kurir Menuju Lokasi'}
-                  </Text>
-                </View>
-              </View>
+        {order.status === 'completed' && (
+          <View style={[styles.block, styles.done]}>
+            <Icon name="checkmark-circle-outline" size={24} color={colors.success} />
+            <View style={styles.flex}>
+              <Text variant="subheading">Penjemputan selesai</Text>
+              <Text variant="bodySmall" tone="muted">
+                Disetujui pengguna{order.completed_at ? ` • ${formatDateTime(order.completed_at)}` : ''}
+              </Text>
             </View>
+          </View>
+        )}
 
-            <View style={styles.itemsCard}>
-              <Text style={styles.sectionTitle}>Daftar Barang & Timbangan</Text>
+        {showMap && (
+          <Card padded={false} style={[styles.block, styles.mapCard]}>
+            <LeafletMap center={{ lat: order.pickup_lat, lng: order.pickup_lng }} markers={markers} zoom={16}
+              style={styles.map} interactive />
+          </Card>
+        )}
 
-              {task.items && task.items.map((item: any, index: number) => (
-                <View key={index} style={styles.itemRow}>
-                  <View style={styles.itemDetails}>
-                    <Text style={styles.itemCategory}>{item.category}</Text>
-                    <Text style={styles.itemEst}>Estimasi: {item.estimated_weight} Kg</Text>
-                  </View>
-
-                  {task.status === 'on_the_way' ? (
-                    <View style={styles.weightInputContainer}>
-                      <TextInput
-                        style={styles.weightInput}
-                        keyboardType="numeric"
-                        placeholder="0.0"
-                        placeholderTextColor="#999"
-                        value={actualWeights[item.id] || ''}
-                        onChangeText={(val) => handleUpdateWeight(item.id, val)}
-                      />
-                      <Text style={styles.unitText}>Kg</Text>
+        {weighing ? (
+          <>
+            <View style={styles.section}>
+              <Text variant="heading">Timbang sampah</Text>
+              <Text variant="bodySmall" tone="muted" style={styles.sectionHint}>
+                Masukkan berat aktual tiap kategori bersama pengguna.
+              </Text>
+            </View>
+            <Card padded={false}>
+              {order.items.map((item, i) => {
+                const kg = parseKg(weights[item.id] ?? '') || 0;
+                const rate = rates?.[item.category];
+                const pts = pointsFor(rates, item.category, kg);
+                return (
+                  <View key={item.id}>
+                    {i > 0 && <Divider />}
+                    <View style={styles.weighRow}>
+                      <View style={styles.itemHead}>
+                        <CategoryTile name={item.category} size={36} />
+                        <View style={styles.flex}>
+                          <Text variant="body" weight="600">{item.category}</Text>
+                          <Text variant="caption" tone="muted" tabular>
+                            Estimasi {formatNumber(item.estimated_weight, 1)} kg
+                            {rate != null ? ` · ${formatNumber(rate)} poin/kg` : ''}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.stepRow}>
+                        <Stepper
+                          value={weights[item.id] ?? ''}
+                          onChange={(v) => setWeights((w) => ({ ...w, [item.id]: v }))}
+                        />
+                        {pts != null && (
+                          <View style={styles.ptsCol}>
+                            <Text variant="heading" tone="success" tabular>+{formatNumber(pts)}</Text>
+                            <Text variant="caption" tone="muted">poin</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
-                  ) : (
-                    <Text style={styles.waitingText}>-</Text>
-                  )}
+                  </View>
+                );
+              })}
+            </Card>
+
+            <View style={[styles.block, styles.summary]}>
+              <View style={styles.summaryRow}>
+                <Text variant="bodySmall" tone="muted">Total timbangan</Text>
+                <Text variant="heading" tabular>{formatNumber(weighedKg, 2)} kg</Text>
+              </View>
+              {weighedPoints != null && (
+                <View style={[styles.summaryRow, styles.summaryGap]}>
+                  <Text variant="bodySmall" tone="muted" numberOfLines={1} style={styles.flex}>Poin untuk {userName}</Text>
+                  <Text variant="heading" tone="success" tabular>+{formatNumber(weighedPoints)}</Text>
                 </View>
-              ))}
+              )}
             </View>
           </>
-        )}
-        <View style={{ height: 40 }} />
-      </ScrollView>
-
-      {!qrToken && (
-        <View style={styles.footer}>
-          {task.status === 'waiting' ? (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#e65100' }]}
-              onPress={handleAcceptTask}
-              disabled={processing}
-            >
-              {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.actionButtonText}>Terima & Menuju Lokasi</Text>}
-            </TouchableOpacity>
-          ) : task.status === 'on_the_way' ? (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: '#1565c0' }]}
-              onPress={handleGenerateQRPress}
-              disabled={processing}
-            >
-              {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.actionButtonText}>Kirim Data & Verifikasi</Text>}
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      )}
-
-      {/* Confirm Accept Task */}
-      <ConfirmModal
-        visible={showConfirmModal}
-        title="Konfirmasi"
-        message="Apakah Anda yakin ingin menerima tugas ini?"
-        confirmText="Terima Tugas"
-        onConfirm={handleConfirmAccept}
-        onCancel={() => setShowConfirmModal(false)}
-      />
-
-      {/* Confirm Generate QR */}
-      <ConfirmModal
-        visible={showWeighConfirmModal}
-        title="Konfirmasi Timbangan"
-        message="Apakah data berat yang dimasukkan sudah benar? Data ini akan dikirim ke User untuk diverifikasi."
-        confirmText="Ya, Kirim"
-        onConfirm={handleGenerateQR}
-        onCancel={() => setShowWeighConfirmModal(false)}
-      />
-
-      {/* Success Modal */}
-      <SuccessModal
-        visible={showSuccessModal}
-        title="Verifikasi Berhasil"
-        message="Poin telah ditransfer ke User."
-        onConfirm={() => {
-          setShowSuccessModal(false);
-          router.replace('/(tabs)');
-        }}
-      />
-
-      {/* Scanner Modal */}
-      <Modal visible={showScanner} animationType="slide" transparent={false}>
-        <View style={{ flex: 1, backgroundColor: 'black' }}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => setShowScanner(false)}>
-              <Ionicons name="close" size={28} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Scan QR User</Text>
-            <View style={{ width: 28 }} />
-          </View>
-          {hasCameraPermission ? (
-            <CameraView
-              style={StyleSheet.absoluteFill}
-              facing="back"
-              onBarcodeScanned={handleBarCodeScanned}
-              barcodeScannerSettings={{
-                barcodeTypes: ["qr"],
-              }}
-            />
-          ) : (
-            <View style={styles.loader}><Text style={{ color: 'white' }}>Meminta akses kamera...</Text></View>
-          )}
-        </View>
-      </Modal>
-
-      {/* Token Input Modal */}
-      <Modal visible={showTokenInput} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Masukkan Token</Text>
-            <Text style={styles.modalSubtitle}>Minta 6 digit token dari aplikasi pengguna.</Text>
-            <TextInput
-              style={styles.tokenInput}
-              placeholder="Contoh: AB3F2K"
-              value={tokenInput}
-              onChangeText={(text) => setTokenInput(text.toUpperCase())}
-              maxLength={6}
-              autoCapitalize="characters"
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 20 }}>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#ccc' }]} onPress={() => setShowTokenInput(false)}>
-                <Text style={styles.modalBtnText}>Batal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#1565c0' }]} onPress={handleInputToken}>
-                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Verifikasi</Text>
-              </TouchableOpacity>
+        ) : (
+          <Card style={styles.block} padded={false}>
+            <View style={styles.blockHead}>
+              <Text variant="heading">{hasActual ? 'Hasil timbangan' : 'Rincian sampah'}</Text>
+              <Text variant="caption" tone="muted" tabular>
+                {hasActual ? 'Total' : 'Estimasi'} {formatNumber(totalKg(order.items), 1)} kg
+              </Text>
             </View>
+            {order.items.map((item) => {
+              const pts = item.actual_weight != null ? pointsFor(rates, item.category, item.actual_weight) : null;
+              return (
+                <View key={item.id}>
+                  <Divider style={styles.inset} />
+                  <View style={styles.item}>
+                    <CategoryTile name={item.category} size={36} />
+                    <View style={styles.flex}>
+                      <Text variant="body" weight="600">{item.category}</Text>
+                      <Text variant="caption" tone="muted" tabular>Estimasi {formatNumber(item.estimated_weight, 1)} kg</Text>
+                    </View>
+                    {item.actual_weight != null && (
+                      <View style={styles.itemRight}>
+                        <Text variant="body" weight="600" tabular>{formatNumber(item.actual_weight, 2)} kg</Text>
+                        {pts != null && <Text variant="caption" tone="success" tabular>+{formatNumber(pts)} poin</Text>}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </Card>
+        )}
+
+        <Card style={styles.block}>
+          <View style={styles.person}>
+            <InitialsAvatar name={userName} size={44} />
+            <View style={styles.flex}>
+              <Text variant="caption" tone="muted">Pengguna</Text>
+              <Text variant="body" weight="600" numberOfLines={1}>{userName}</Text>
+            </View>
+            {order.user_phone && order.status !== 'waiting' && order.status !== 'completed' && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Telepon pengguna"
+                hitSlop={6}
+                onPress={() => Linking.openURL(`tel:${order.user_phone}`)}
+                style={({ pressed }) => [styles.call, pressed && styles.callPressed]}
+              >
+                <Icon name="call-outline" size={20} color={colors.primary} />
+              </Pressable>
+            )}
           </View>
-        </View>
-      </Modal>
+          <Divider style={styles.rule} />
+          <View style={styles.addr}>
+            <Icon name="location-outline" size={18} color={colors.textMuted} />
+            <Text variant="bodySmall" style={styles.flex}>{order.pickup_address}</Text>
+          </View>
+          {order.status !== 'completed' && order.status !== 'cancelled' && (
+            <Button title="Buka di Google Maps" icon="navigate-outline" variant="secondary" size="sm" style={styles.nav}
+              onPress={() => Linking.openURL(mapsUrl(order.pickup_lat, order.pickup_lng))} />
+          )}
+        </Card>
+      </Screen>
 
-      <WarningModal
-        visible={showWarning}
-        title="Perhatian"
-        message={warningMessage}
-        onConfirm={() => setShowWarning(false)}
+      <Dialog
+        visible={releaseOpen}
+        tone="warning"
+        icon="return-up-back"
+        title="Lepas tugas ini?"
+        message="Order dikembalikan ke daftar tersedia dan pengguna diberi tahu bahwa kurir lain akan dicarikan."
+        cancelLabel="Batal"
+        confirmLabel="Lepas tugas"
+        destructive
+        loading={busy}
+        onCancel={() => setReleaseOpen(false)}
+        onConfirm={release}
       />
-
-      <ErrorModal
-        visible={showError}
-        title="Gagal"
-        message={errorMessage}
-        onConfirm={() => setShowError(false)}
-      />
-    </KeyboardAvoidingView>
+    </>
   );
 }
 
+// Poin per kg dibaca dari backend (/config/rates); bila belum termuat, angka poin tidak ditampilkan.
+function useRates() {
+  const [rates, setRates] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api.get<{ rates: Record<string, number> }>('/config/rates')
+      .then(({ data }) => { if (alive && data?.rates) setRates(data.rates); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return rates;
+}
+
+// Sama dengan perhitungan server: pembulatan per item.
+function pointsFor(rates: Record<string, number> | null, category: string, kg: number) {
+  const rate = rates?.[category];
+  return rate == null ? null : Math.round(kg * rate);
+}
+
+function Stepper({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const num = parseKg(value) || 0;
+  const step = (delta: number) => {
+    const next = Math.min(MAX_KG, Math.max(0, Math.round((num + delta) * 10) / 10));
+    onChange(String(next));
+  };
+  const invalid = !(num > 0 && num <= MAX_KG);
+  return (
+    <View style={[styles.stepper, invalid && styles.stepInvalid]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Kurangi berat" onPress={() => step(-STEP)}
+        style={({ pressed }) => [styles.stepBtn, pressed && styles.stepBtnPressed]}>
+        <Icon name="remove" size={20} color={colors.text} />
+      </Pressable>
+      <View style={styles.stepValue}>
+        <TextInput
+          value={value}
+          onChangeText={(t) => onChange(t.replace(/[^0-9.,]/g, ''))}
+          keyboardType="decimal-pad"
+          style={styles.stepText}
+          accessibilityLabel="Berat dalam kilogram"
+          maxLength={6}
+          selectTextOnFocus
+        />
+        <Text variant="bodySmall" tone="muted">kg</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Tambah berat" onPress={() => step(STEP)}
+        style={({ pressed }) => [styles.stepBtn, pressed && styles.stepBtnPressed]}>
+        <Icon name="add" size={20} color={colors.text} />
+      </Pressable>
+    </View>
+  );
+}
+
+function useSecondsLeft(expiresAt: string | undefined) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!expiresAt) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [expiresAt]);
+  if (!expiresAt) return null;
+  return Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
+}
+
+function QrPanel({ verif, busy, onNewCode, onReweigh }: {
+  verif: VerificationCode | null;
+  busy: boolean;
+  onNewCode: () => void;
+  onReweigh: () => void;
+}) {
+  const seconds = useSecondsLeft(verif?.expires_at);
+  const expired = seconds === 0;
+
+  return (
+    <Card style={[styles.block, styles.qrCard]}>
+      <Text variant="heading" align="center">Minta pengguna memindai</Text>
+      <Text variant="bodySmall" tone="muted" align="center" style={styles.qrLead}>
+        Pengguna membuka “Pindai QR” di aplikasinya lalu menyetujui hasil timbangan.
+      </Text>
+      <View style={[styles.qrBox, expired && styles.qrExpired]}>
+        {verif ? (
+          <QRCode value={verif.qr_payload} size={208} color={colors.text} backgroundColor="#FFFFFF" />
+        ) : (
+          <Skeleton width={208} height={208} />
+        )}
+      </View>
+      {verif && (
+        <>
+          <Text variant="caption" tone="muted" align="center" style={styles.codeLabel}>Kode manual</Text>
+          <Text style={styles.code} align="center" selectable tabular>{verif.code}</Text>
+          {expired ? (
+            <Text variant="bodySmall" weight="600" tone="danger" align="center">Kode kedaluwarsa</Text>
+          ) : (
+            <Pill
+              tone="warning"
+              icon="time-outline"
+              label={`Berlaku ${Math.floor((seconds ?? 0) / 60)}:${String((seconds ?? 0) % 60).padStart(2, '0')}`}
+              style={styles.timer}
+            />
+          )}
+        </>
+      )}
+      <View style={styles.qrActions}>
+        <Button title="Timbang ulang" variant="secondary" size="sm" icon="scale-outline" onPress={onReweigh}
+          disabled={busy} style={styles.flex} />
+        <Button title="Buat kode baru" variant={expired ? 'primary' : 'secondary'} size="sm" icon="refresh-outline"
+          loading={busy} onPress={onNewCode} style={styles.flex} />
+      </View>
+    </Card>
+  );
+}
+
+function SharingBadge({ state }: { state: SharingState }) {
+  const map: Record<SharingState, { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral'; icon: keyof typeof Ionicons.glyphMap }> = {
+    off: { label: 'Lokasi tidak dibagikan', tone: 'neutral', icon: 'navigate-outline' },
+    starting: { label: 'Menyiapkan lokasi…', tone: 'neutral', icon: 'navigate-outline' },
+    on: { label: 'Lokasi dibagikan', tone: 'success', icon: 'navigate-outline' },
+    denied: { label: 'Izin lokasi ditolak', tone: 'danger', icon: 'warning-outline' },
+    error: { label: 'Gagal kirim lokasi', tone: 'warning', icon: 'warning-outline' },
+  };
+  const m = map[state];
+  return <Pill label={m.label} tone={m.tone} icon={m.icon} />;
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f7fa',
+  flex: { flex: 1 },
+  statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  block: { marginTop: spacing.lg },
+  section: { marginTop: spacing.xxl, marginBottom: spacing.md },
+  sectionHint: { marginTop: spacing.xxs },
+  done: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg,
+    borderRadius: radius.card, backgroundColor: colors.successSoft,
   },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  mapCard: { borderRadius: radius.lg, overflow: 'hidden' },
+  map: { height: 200 },
+  person: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  call: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primarySoft,
+    alignItems: 'center', justifyContent: 'center',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    zIndex: 10,
+  callPressed: { backgroundColor: colors.primarySoftPressed },
+  rule: { marginVertical: spacing.lg },
+  addr: { flexDirection: 'row', gap: spacing.sm },
+  nav: { marginTop: spacing.lg, height: 44 },
+  blockHead: {
+    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.lg,
   },
-  backButton: {
-    padding: 5,
+  item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  itemRight: { alignItems: 'flex-end' },
+  inset: { marginHorizontal: spacing.lg },
+  weighRow: { padding: spacing.lg, gap: spacing.md },
+  itemHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  ptsCol: { alignItems: 'flex-end' },
+  stepper: {
+    flexDirection: 'row', alignItems: 'stretch', height: 48, borderWidth: 1, borderColor: colors.borderStrong,
+    borderRadius: 14, overflow: 'hidden', backgroundColor: colors.surface,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+  stepInvalid: { borderColor: colors.danger },
+  stepBtn: { width: 48, alignItems: 'center', justifyContent: 'center' },
+  stepBtnPressed: { backgroundColor: colors.surfaceAlt },
+  stepValue: {
+    width: 96, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
+    paddingHorizontal: spacing.sm, backgroundColor: colors.surfaceAlt,
   },
-  content: {
-    flex: 1,
-    padding: 20,
+  stepText: {
+    minWidth: 36, maxWidth: 60, fontSize: 20, fontFamily: fonts.semibold, color: colors.text,
+    textAlign: 'right', padding: 0, fontVariant: ['tabular-nums'],
   },
-  infoCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+  summary: { padding: spacing.lg, borderRadius: radius.card, backgroundColor: colors.primarySoft },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  summaryGap: { marginTop: spacing.sm },
+  qrCard: { alignItems: 'center', padding: spacing.xl },
+  qrLead: { marginTop: spacing.xs, maxWidth: 280 },
+  qrBox: {
+    marginTop: spacing.xl, padding: spacing.md, borderRadius: radius.lg, backgroundColor: '#FFFFFF',
+    borderWidth: 1, borderColor: colors.border,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  infoIcon: {
-    marginRight: 15,
-    marginTop: 2,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 15,
-    color: '#333',
-    fontWeight: '500',
-    lineHeight: 22,
-  },
-  itemsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    paddingVertical: 12,
-  },
-  itemDetails: {
-    flex: 1,
-  },
-  itemCategory: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  itemEst: {
-    fontSize: 12,
-    color: '#666',
-  },
-  weightInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    width: 100,
-    height: 40,
-    overflow: 'hidden',
-  },
-  weightInput: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1565c0',
-    textAlign: 'center',
-  },
-  unitText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: 'bold',
-  },
-  waitingText: {
-    fontSize: 14,
-    color: '#999',
-    fontStyle: 'italic',
-  },
-  qrContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 30,
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    marginTop: 20,
-  },
-  qrTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-  },
-  qrInstruction: {
-    textAlign: 'center',
-    color: '#666',
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  footer: {
-    padding: 20,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  actionButton: {
-    borderRadius: 12,
-    height: 55,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  tokenInput: {
-    backgroundColor: '#f5f5f5',
-    width: '100%',
-    height: 55,
-    borderRadius: 12,
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#333',
-    letterSpacing: 2,
-  },
-  modalBtn: {
-    flex: 1,
-    height: 45,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 5,
-  },
-  modalBtnText: {
-    fontWeight: 'bold',
-    fontSize: 14,
-  }
+  qrExpired: { opacity: 0.25 },
+  codeLabel: { marginTop: spacing.lg },
+  code: { fontSize: 32, lineHeight: 40, fontFamily: fonts.extrabold, letterSpacing: 8, color: colors.text, marginVertical: spacing.xs },
+  timer: { alignSelf: 'center' },
+  qrActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl, alignSelf: 'stretch' },
 });

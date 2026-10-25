@@ -1,405 +1,220 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
-import api from '../../services/api';
-import { useAuthStore } from '../../store/useAuthStore';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Pressable, SectionList, StyleSheet, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import api, { getErrorMessage } from '../../services/api';
+import { useSocketEvent } from '../../services/socket';
+import { PickupCard } from '../../components/PickupCard';
+import { Card, EmptyState, Segmented, SkeletonCard, Text, colors, radius, spacing, Icon } from '../../ui';
+import { formatDate, formatNumber, formatTime } from '../../lib/format';
+import { ACTIVE_STATUSES } from '../../lib/status';
+import type { PickupOrder, Transaction } from '../../lib/types';
 
-type TabType = 'proses' | 'selesai';
+type Tab = 'pickups' | 'transactions';
 
-export default function RiwayatScreen() {
-  const [activeTab, setActiveTab] = useState<TabType>('proses');
-  const [loading, setLoading] = useState(true);
-  const [pickups, setPickups] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const { user } = useAuthStore();
+export default function ActivityScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [tab, setTab] = useState<Tab>('pickups');
+  const [pickups, setPickups] = useState<PickupOrder[] | null>(null);
+  const [trx, setTrx] = useState<Transaction[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchData();
-    }, [activeTab])
-  );
-
-  const fetchData = async () => {
-    if (!user) return;
-    setLoading(true);
+  const load = useCallback(async () => {
+    setError(null);
     try {
-      if (activeTab === 'proses') {
-        const res = await api.get(`/pickups?user_id=${user.id}`);
-        // Filter only active pickups (waiting, on_the_way)
-        setPickups(res.data.filter((p: any) => p.status !== 'completed' && p.status !== 'cancelled'));
-      } else {
-        const res = await api.get(`/users/${user.id}/transactions`);
-        setTransactions(res.data);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
+      const [p, t] = await Promise.all([
+        api.get<PickupOrder[]>('/pickups'),
+        api.get<Transaction[]>('/users/me/transactions', { params: { limit: 100 } }),
+      ]);
+      setPickups(p.data);
+      setTrx(t.data);
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setPickups((v) => v || []);
+      setTrx((v) => v || []);
     }
-  };
+  }, []);
 
-  const renderProses = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-      style={styles.card}
-      onPress={() => router.push({ pathname: '/pickup-detail', params: { id: item.id } })}
-    >
-      <View style={styles.cardHeader}>
-        <Text style={styles.orderId}>Order #{item.id}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: item.status === 'on_the_way' ? '#fff3e0' : item.status === 'pending_verification' ? '#fff8e1' : '#e3f2fd' }]}>
-          <Text style={[styles.statusText, { color: item.status === 'on_the_way' ? '#e65100' : item.status === 'pending_verification' ? '#ffb300' : '#1565c0' }]}>
-            {item.status === 'on_the_way' ? 'Kurir Menuju Lokasi' : item.status === 'pending_verification' ? 'Menunggu Verifikasi QR' : 'Menunggu Kurir'}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.cardBody}>
-        <View style={styles.infoRow}>
-          <Ionicons name="location-outline" size={20} color="#666" />
-          <Text style={styles.infoText} numberOfLines={2}>{item.pickup_address}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="time-outline" size={20} color="#666" />
-          <Text style={styles.infoText}>{new Date(item.created_at).toLocaleString()}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useSocketEvent(['order:accepted', 'order:arrived', 'order:weighed', 'order:completed', 'order:cancelled'], () => load());
+
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+
+  const pickupSections = useMemo(() => {
+    if (!pickups) return [];
+    const active = pickups.filter((p) => ACTIVE_STATUSES.includes(p.status));
+    const done = pickups.filter((p) => !ACTIVE_STATUSES.includes(p.status));
+    return [
+      ...(active.length ? [{ title: 'Sedang berjalan', data: active }] : []),
+      ...(done.length ? [{ title: 'Riwayat penjemputan', data: done }] : []),
+    ];
+  }, [pickups]);
+
+  const trxSections = useMemo(() => {
+    if (!trx) return [];
+    const groups = new Map<string, Transaction[]>();
+    trx.forEach((t) => {
+      const key = formatDate(t.created_at);
+      groups.set(key, [...(groups.get(key) || []), t]);
+    });
+    return [...groups.entries()].map(([title, data]) => ({ title, data }));
+  }, [trx]);
+
+  // Ringkasan bulan berjalan, dihitung dari baris mutasi yang tampil.
+  const month = useMemo(() => {
+    const now = new Date();
+    const rows = (trx || []).filter((t) => {
+      const d = new Date(t.created_at);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const inPts = rows.filter((t) => t.points > 0).reduce((a, t) => a + t.points, 0);
+    const outPts = rows.filter((t) => t.points < 0).reduce((a, t) => a - t.points, 0);
+    return { label: now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }), inPts, outPts };
+  }, [trx]);
+
+  const activeCount = pickups?.filter((p) => ACTIVE_STATUSES.includes(p.status)).length || 0;
+  const loading = tab === 'pickups' ? pickups === null : trx === null;
+
+  const empty = loading ? (
+    <View>{[0, 1, 2].map((i) => <SkeletonCard key={i} />)}</View>
+  ) : error ? (
+    <EmptyState icon="cloud-offline-outline" title="Gagal memuat" message={error} actionLabel="Coba lagi" onAction={load} />
+  ) : tab === 'pickups' ? (
+    <EmptyState icon="bicycle-outline" title="Belum ada penjemputan" message="Setor sampah pertama Anda dan kumpulkan poin donasi."
+      actionLabel="Setor sampah" onAction={() => router.push('/setor')} />
+  ) : (
+    <EmptyState icon="receipt-outline" title="Belum ada transaksi" message="Riwayat poin masuk dan donasi akan tampil di sini." />
   );
-
-  const renderSelesai = ({ item }: { item: any }) => {
-    const isCredit = item.type === 'setor';
-    return (
-      <TouchableOpacity 
-        style={styles.trxCard}
-        onPress={() => setSelectedTransaction(item)}
-      >
-        <View style={[styles.iconBox, { backgroundColor: isCredit ? '#e8f5e9' : '#ffebee' }]}>
-          <Ionicons name={isCredit ? 'arrow-down-outline' : 'arrow-up-outline'} size={24} color={isCredit ? '#2e7d32' : '#c62828'} />
-        </View>
-        <View style={styles.trxContent}>
-          <Text style={styles.trxTitle}>{item.title}</Text>
-          <Text style={styles.trxDate}>{new Date(item.created_at).toLocaleString()}</Text>
-        </View>
-        <Text style={[styles.trxPoints, { color: isCredit ? '#2e7d32' : '#c62828' }]}>
-          {isCredit ? '+' : ''}{item.points}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={['#004d40', '#00bfa5']} style={styles.header}>
-        <Text style={styles.headerTitle}>Lacak & Riwayat</Text>
-        
-        <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'proses' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('proses')}
-          >
-            <Text style={[styles.tabText, activeTab === 'proses' && styles.tabTextActive]}>Dalam Proses</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'selesai' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('selesai')}
-          >
-            <Text style={[styles.tabText, activeTab === 'selesai' && styles.tabTextActive]}>Selesai</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+    <View style={[styles.root, { paddingTop: insets.top + spacing.md }]}>
+      <View style={styles.header}>
+        <Text variant="title">Aktivitas</Text>
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'pickups', label: 'Penjemputan', count: activeCount },
+            { value: 'transactions', label: 'Mutasi poin' },
+          ]}
+          style={styles.segment}
+        />
+      </View>
 
-      {loading ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#00bfa5" />
-        </View>
-      ) : activeTab === 'proses' ? (
-        <FlatList
-          data={pickups}
-          renderItem={renderProses}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={<Text style={styles.emptyText}>Tidak ada penjemputan aktif.</Text>}
+      {tab === 'pickups' ? (
+        <SectionList
+          sections={pickupSections}
+          keyExtractor={(o) => String(o.id)}
+          contentContainerStyle={styles.list}
+          stickySectionHeadersEnabled={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          renderSectionHeader={({ section }) => <Text variant="overline" tone="muted" style={styles.sectionTitle}>{section.title}</Text>}
+          renderItem={({ item }) => <PickupCard order={item} onPress={() => router.push(`/pickup/${item.id}`)} />}
+          ListEmptyComponent={empty}
         />
       ) : (
-        <FlatList
-          data={transactions}
-          renderItem={renderSelesai}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={<Text style={styles.emptyText}>Belum ada riwayat transaksi.</Text>}
+        <SectionList
+          sections={trxSections}
+          ListHeaderComponent={trx && trx.length > 0 ? <MonthSummary {...month} /> : null}
+          keyExtractor={(t) => String(t.id)}
+          contentContainerStyle={styles.list}
+          stickySectionHeadersEnabled={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          renderSectionHeader={({ section }) => <Text variant="overline" tone="muted" style={styles.sectionTitle}>{section.title}</Text>}
+          renderItem={({ item, index, section }) => (
+            <TrxRow
+              item={item}
+              first={index === 0}
+              last={index === section.data.length - 1}
+              onPress={item.ref_type === 'pickup' && item.ref_id ? () => router.push(`/pickup/${item.ref_id}`) : undefined}
+            />
+          )}
+          ListEmptyComponent={empty}
         />
       )}
-
-      {/* Transaction Detail Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={!!selectedTransaction}
-        onRequestClose={() => setSelectedTransaction(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Detail Transaksi</Text>
-              <TouchableOpacity onPress={() => setSelectedTransaction(null)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            {selectedTransaction && (
-              <View style={styles.modalBody}>
-                <View style={[styles.modalIconBox, { backgroundColor: selectedTransaction.type === 'setor' ? '#e8f5e9' : '#ffebee' }]}>
-                  <Ionicons 
-                    name={selectedTransaction.type === 'setor' ? 'arrow-down-outline' : 'arrow-up-outline'} 
-                    size={32} 
-                    color={selectedTransaction.type === 'setor' ? '#2e7d32' : '#c62828'} 
-                  />
-                </View>
-                
-                <Text style={styles.modalTrxTitle}>{selectedTransaction.title}</Text>
-                <Text style={styles.modalTrxDate}>{new Date(selectedTransaction.created_at).toLocaleString()}</Text>
-                
-                <Text style={[styles.modalTrxPoints, { color: selectedTransaction.type === 'setor' ? '#2e7d32' : '#c62828' }]}>
-                  {selectedTransaction.type === 'setor' ? '+' : ''}{selectedTransaction.points} Poin
-                </Text>
-                
-                <View style={styles.modalDivider} />
-                
-                <Text style={styles.modalDescLabel}>Deskripsi</Text>
-                <Text style={styles.modalDescText}>{selectedTransaction.description}</Text>
-              </View>
-            )}
-            
-            <TouchableOpacity 
-              style={styles.modalButton}
-              onPress={() => setSelectedTransaction(null)}
-            >
-              <Text style={styles.modalButtonText}>Tutup</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
+function MonthSummary({ label, inPts, outPts }: { label: string; inPts: number; outPts: number }) {
+  const net = inPts - outPts;
+  const cols = [
+    { l: 'Masuk', v: `+${formatNumber(inPts)}`, tone: 'success' as const },
+    { l: 'Didonasikan', v: outPts ? `−${formatNumber(outPts)}` : '0', tone: 'default' as const },
+    { l: 'Selisih', v: `${net > 0 ? '+' : net < 0 ? '−' : ''}${formatNumber(Math.abs(net))}`, tone: 'default' as const },
+  ];
+  return (
+    <Card style={styles.summary}>
+      <Text variant="bodySmall" weight="500" tone="muted">{label}</Text>
+      <View style={styles.summaryRow}>
+        {cols.map((c) => (
+          <View key={c.l} style={styles.flex}>
+            <Text variant="caption" tone="muted">{c.l}</Text>
+            <Text variant="heading" tone={c.tone} tabular style={styles.summaryValue}>{c.v}</Text>
+          </View>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
+function TrxRow({ item, first, last, onPress }: { item: Transaction; first: boolean; last: boolean; onPress?: () => void }) {
+  const credit = item.points > 0;
+  return (
+    <Pressable
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.trx,
+        first && styles.trxFirst,
+        last && styles.trxLast,
+        !last && styles.trxDivider,
+        pressed && { backgroundColor: colors.surfaceAlt },
+      ]}
+    >
+      <View style={styles.trxIcon}>
+        <Icon name={credit ? 'leaf-outline' : 'heart-outline'} size={18} color={colors.textMuted} />
+      </View>
+      <View style={styles.flex}>
+        <Text variant="subheading" numberOfLines={1}>{item.title}</Text>
+        <Text variant="caption" tone="muted" numberOfLines={2}>
+          {formatTime(item.created_at)}{item.description ? ` · ${item.description}` : ''}
+        </Text>
+      </View>
+      <Text variant="subheading" tone={credit ? 'success' : 'default'} tabular>
+        {credit ? '+' : '−'}{formatNumber(Math.abs(item.points))}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9f9f9',
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 25,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 20,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-    padding: 4,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  tabButtonActive: {
-    backgroundColor: '#fff',
-  },
-  tabText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  tabTextActive: {
-    color: '#004d40',
-  },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContainer: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  orderId: {
-    fontWeight: 'bold',
-    color: '#333',
-    fontSize: 16,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  cardBody: {
-    gap: 10,
-  },
-  infoRow: {
+  root: { flex: 1, backgroundColor: colors.bg },
+  header: { paddingHorizontal: spacing.xxl },
+  segment: { marginTop: spacing.lg, marginBottom: spacing.sm },
+  list: { paddingHorizontal: spacing.xxl, paddingBottom: spacing.xxxl },
+  summary: { marginTop: spacing.md, paddingHorizontal: spacing.xl, gap: spacing.md },
+  summaryRow: { flexDirection: 'row', gap: spacing.lg },
+  summaryValue: { fontSize: 20, lineHeight: 26, marginTop: 2 },
+  sectionTitle: { marginTop: spacing.lg, marginBottom: spacing.sm },
+  flex: { flex: 1 },
+  trx: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    backgroundColor: colors.surface,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: colors.border,
   },
-  infoText: {
-    marginLeft: 10,
-    color: '#666',
-    flex: 1,
-  },
-  trxCard: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 10,
-    alignItems: 'center',
-    elevation: 1,
-  },
-  iconBox: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  trxContent: {
-    flex: 1,
-  },
-  trxTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  trxDate: {
-    fontSize: 12,
-    color: '#999',
-  },
-  trxPoints: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#999',
-    marginTop: 50,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalBody: {
-    alignItems: 'center',
-  },
-  modalIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  modalTrxTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 5,
-  },
-  modalTrxDate: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 15,
-  },
-  modalTrxPoints: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: '#eee',
-    width: '100%',
-    marginBottom: 20,
-  },
-  modalDescLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    alignSelf: 'flex-start',
-    marginBottom: 5,
-  },
-  modalDescText: {
-    fontSize: 14,
-    color: '#666',
-    alignSelf: 'flex-start',
-    marginBottom: 30,
-    lineHeight: 20,
-  },
-  modalButton: {
-    backgroundColor: '#00bfa5',
-    padding: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  trxFirst: { borderTopWidth: 1, borderTopLeftRadius: radius.card, borderTopRightRadius: radius.card },
+  trxLast: { borderBottomWidth: 1, borderBottomLeftRadius: radius.card, borderBottomRightRadius: radius.card },
+  trxDivider: { borderBottomWidth: 1, borderBottomColor: colors.rule },
+  trxIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
 });

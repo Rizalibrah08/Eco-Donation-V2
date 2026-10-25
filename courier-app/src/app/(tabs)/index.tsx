@@ -1,170 +1,128 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import api from '../../services/api';
-import { useAuthStore } from '../../store/useAuthStore';
+import React, { useCallback, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import api, { getErrorMessage } from '../../services/api';
+import { useSocketEvent } from '../../services/socket';
+import { useAuthStore } from '../../store/auth';
+import { InitialsAvatar, TaskCard } from '../../components/TaskCard';
+import { Card, EmptyState, Screen, Segmented, SkeletonCard, Text, colors, fonts, spacing } from '../../ui';
+import { totalKg } from '../../lib/status';
+import { formatNumber } from '../../lib/format';
+import type { PickupOrder } from '../../lib/types';
 
-export default function DashboardScreen() {
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+type Scope = 'available' | 'mine';
+
+export default function TasksScreen() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const [scope, setScope] = useState<Scope>('mine');
+  const [lists, setLists] = useState<Record<Scope, PickupOrder[] | null>>({ available: null, mine: null });
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchTasks();
-    }, [])
+  const load = useCallback(async () => {
+    try {
+      const [available, mine] = await Promise.all([
+        api.get<PickupOrder[]>('/courier/tasks', { params: { scope: 'available' } }),
+        api.get<PickupOrder[]>('/courier/tasks', { params: { scope: 'mine' } }),
+      ]);
+      setLists({ available: available.data, mine: mine.data });
+      setError(null);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  useSocketEvent(
+    ['order:new', 'order:taken', 'order:rejected', 'order:cancelled', 'order:completed'],
+    () => load(),
   );
 
-  const fetchTasks = async () => {
-    try {
-      // For courier, fetch tasks that are 'waiting' or assigned to them ('on_the_way')
-      const response = await api.get(`/pickups/courier/${user?.id}/tasks`);
-      setTasks(response.data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+  const refresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
   };
 
-  const renderTask = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-      style={styles.card}
-      onPress={() => router.push(`/task/${item.id}`)}
-    >
-      <View style={styles.cardHeader}>
-        <Text style={styles.orderId}>Order #{item.id}</Text>
-        <View style={[styles.statusBadge, { 
-          backgroundColor: item.status === 'waiting' ? '#fff3e0' : 
-                          item.status === 'pending_verification' ? '#fff8e1' : '#e3f2fd' 
-        }]}>
-          <Text style={[styles.statusText, { 
-            color: item.status === 'waiting' ? '#e65100' : 
-                   item.status === 'pending_verification' ? '#ffb300' : '#1565c0' 
-          }]}>
-            {item.status === 'waiting' ? 'Baru' : 
-             item.status === 'pending_verification' ? 'Menunggu Scan QR' : 'Diambil'}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.infoRow}>
-        <Ionicons name="location-outline" size={20} color="#666" />
-        <Text style={styles.infoText} numberOfLines={2}>{item.pickup_address}</Text>
-      </View>
-      
-      <View style={styles.infoRow}>
-        <Ionicons name="person-outline" size={20} color="#666" />
-        <Text style={styles.infoText}>{item.user_name}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const list = lists[scope];
+  const hour = new Date().getHours();
+  const greeting = hour < 11 ? 'Selamat pagi' : hour < 15 ? 'Selamat siang' : hour < 19 ? 'Selamat sore' : 'Selamat malam';
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Daftar Tugas</Text>
-        <TouchableOpacity onPress={fetchTasks}>
-          <Ionicons name="refresh" size={24} color="#1565c0" />
-        </TouchableOpacity>
+    <Screen refreshing={refreshing} onRefresh={refresh}>
+      <View style={styles.head}>
+        <View style={styles.flex}>
+          <Text variant="bodySmall" tone="muted">{greeting},</Text>
+          <Text variant="title" numberOfLines={1}>{user?.name}</Text>
+        </View>
+        <InitialsAvatar name={user?.name} size={44} bg={colors.primarySoft} fg={colors.primary} />
       </View>
 
-      {loading ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#1565c0" />
-        </View>
-      ) : (
-        <FlatList
-          data={tasks}
-          renderItem={renderTask}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>Tidak ada tugas penjemputan saat ini.</Text>
-          }
-        />
+      {lists.mine && lists.available && (
+        <Card style={styles.summary} padded={false}>
+          <Stat value={formatNumber(lists.mine.length)} label="Tugas aktif" />
+          <View style={styles.vrule} />
+          <Stat value={formatNumber(lists.available.length)} label="Tersedia" />
+          <View style={styles.vrule} />
+          <Stat
+            value={`${formatNumber(lists.mine.reduce((sum, o) => sum + totalKg(o.items), 0), 1)} kg`}
+            label="Muatan tugas"
+          />
+        </Card>
       )}
+
+      <Segmented
+        value={scope}
+        onChange={setScope}
+        options={[
+          { value: 'mine', label: 'Tugas saya', count: lists.mine?.length },
+          { value: 'available', label: 'Tersedia', count: lists.available?.length },
+        ]}
+        style={styles.tabs}
+      />
+
+      {error && !list ? (
+        <EmptyState icon="cloud-offline-outline" title="Tidak dapat memuat" message={error} actionLabel="Coba lagi"
+          onAction={load} />
+      ) : !list ? (
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
+      ) : list.length === 0 ? (
+        scope === 'mine' ? (
+          <EmptyState icon="bicycle-outline" title="Belum ada tugas aktif"
+            message="Ambil permintaan penjemputan di tab Tersedia."
+            actionLabel={lists.available?.length ? 'Lihat yang tersedia' : undefined}
+            onAction={lists.available?.length ? () => setScope('available') : undefined} />
+        ) : (
+          <EmptyState icon="file-tray-outline" title="Belum ada permintaan baru"
+            message="Permintaan baru akan muncul otomatis di sini." />
+        )
+      ) : (
+        list.map((o) => <TaskCard key={o.id} order={o} onPress={() => router.push(`/task/${o.id}`)} />)
+      )}
+    </Screen>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue} tabular numberOfLines={1}>{value}</Text>
+      <Text variant="caption" tone="muted" numberOfLines={1}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f7fa',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 25,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContainer: {
-    padding: 20,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  orderId: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  infoText: {
-    marginLeft: 10,
-    color: '#666',
-    flex: 1,
-    fontSize: 14,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#999',
-    marginTop: 50,
-  },
+  flex: { flex: 1 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xxl },
+  summary: { flexDirection: 'row', alignItems: 'stretch', paddingVertical: spacing.lg, marginBottom: spacing.xxl },
+  stat: { flex: 1, paddingHorizontal: spacing.lg, gap: spacing.xxs },
+  statValue: { fontSize: 20, lineHeight: 26, fontFamily: fonts.semibold, color: colors.text },
+  vrule: { width: 1, backgroundColor: colors.rule },
+  tabs: { marginBottom: spacing.lg },
 });

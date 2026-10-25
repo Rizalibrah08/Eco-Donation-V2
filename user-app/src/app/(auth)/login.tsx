@@ -1,224 +1,129 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import api from '../../services/api';
-import { useAuthStore } from '../../store/useAuthStore';
-import { Ionicons } from '@expo/vector-icons';
-import WarningModal from '../../components/WarningModal';
-import ErrorModal from '../../components/ErrorModal';
+import { StyleSheet, View } from 'react-native';
+import { Link } from 'expo-router';
+import api, { getErrorMessage } from '../../services/api';
+import { useAuthStore } from '../../store/auth';
+import { useRates } from '../../hooks/useRates';
+import { formatNumber } from '../../lib/format';
+import { AuthHero, authStyles } from '../../components/AuthHero';
+import { Button, Input, Screen, Text, categoryStyle, colors, radius, spacing, Icon } from '../../ui';
 
 export default function LoginScreen() {
+  const setSession = useAuthStore((s) => s.setSession);
+  const { rates } = useRates();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showWarning, setShowWarning] = useState(false);
-  const [showError, setShowError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const router = useRouter();
-  const login = useAuthStore((state) => state.login);
+  const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+
+  const emailError = touched && !/^\S+@\S+\.\S+$/.test(email.trim()) ? 'Masukkan email yang valid.' : null;
+  const passwordError = touched && !password ? 'Kata sandi wajib diisi.' : null;
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      setShowWarning(true);
-      return;
-    }
-
+    setTouched(true);
+    setError(null);
+    if (!/^\S+@\S+\.\S+$/.test(email.trim()) || !password) return;
     setLoading(true);
     try {
-      const response = await api.post('/auth/login', { email, password });
-      const { user, token } = response.data;
-
-      login(user, token);
-      router.replace('/(tabs)');
-    } catch (error: any) {
-      setErrorMessage(error.response?.data?.error || error.response?.data?.message || 'Terjadi kesalahan pada server');
-      setShowError(true);
+      const { data } = await api.post('/auth/login', { email: email.trim(), password });
+      setSession(data.user, data.token);
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <LinearGradient
-        colors={['#004d40', '#00bfa5']}
-        style={styles.background}
-      />
+    <Screen contentStyle={styles.content}>
+      <AuthHero title="Selamat datang kembali" subtitle="Ubah sampah menjadi kebaikan untuk sesama." />
 
-      <View style={styles.card}>
-        <View style={styles.headerContainer}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="leaf" size={40} color="#00bfa5" />
-          </View>
-          <Text style={styles.title}>Eco-Donation</Text>
-          <Text style={styles.subtitle}>Ubah sampah menjadi kebaikan</Text>
+      {/* Nilai setoran per kg: data milik produk ini, langsung di layar pertama. */}
+      <View style={styles.rates}>
+        <View style={styles.ratesHead}>
+          <Text variant="bodySmall" weight="500" tone="muted">Nilai setoran per kg</Text>
+          <Text variant="bodySmall" weight="500" tone="muted">1 poin = Rp1</Text>
         </View>
-
-        <View style={styles.formContainer}>
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#999"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
-
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.loginButtonText}>Masuk</Text>
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>Belum punya akun? </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-              <Text style={styles.registerLink}>Daftar Sekarang</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.rateRow}>
+          {Object.keys(rates).map((name) => {
+            const c = categoryStyle(name);
+            return (
+              <View key={name} style={[styles.rate, { backgroundColor: c.bg }]}>
+                <Icon name={c.icon} size={18} color={c.ink} />
+                <Text variant="heading" tabular style={{ color: c.ink }}>{formatNumber(rates[name])}</Text>
+                <Text variant="caption" style={{ color: c.ink }}>{c.short}</Text>
+              </View>
+            );
+          })}
         </View>
       </View>
 
-      <WarningModal
-        visible={showWarning}
-        title="Form Tidak Lengkap"
-        message="Silakan isi email dan password untuk melanjutkan."
-        onConfirm={() => setShowWarning(false)}
+      {error && (
+        <View style={authStyles.alert} accessibilityRole="alert">
+          <Text variant="bodySmall" tone="danger" weight="500">{error}</Text>
+        </View>
+      )}
+
+      <Input
+        label="Email"
+        icon="mail-outline"
+        placeholder="nama@email.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoComplete="email"
+        value={email}
+        onChangeText={setEmail}
+        error={emailError}
+        containerStyle={styles.field}
+      />
+      <Input
+        label="Kata sandi"
+        icon="lock-closed-outline"
+        placeholder="Masukkan kata sandi"
+        secureTextEntry
+        autoComplete="password"
+        value={password}
+        onChangeText={setPassword}
+        error={passwordError}
+        returnKeyType="go"
+        onSubmitEditing={handleLogin}
+        containerStyle={styles.field}
       />
 
-      <ErrorModal
-        visible={showError}
-        title="Login Gagal"
-        message={errorMessage}
-        onConfirm={() => setShowError(false)}
-      />
-    </KeyboardAvoidingView>
+      <Button title="Masuk" onPress={handleLogin} loading={loading} size="lg" style={styles.cta} />
+
+      <View style={styles.footer}>
+        <Text variant="bodySmall" tone="muted">Belum punya akun? </Text>
+        <Link href="/(auth)/register" replace>
+          <Text variant="bodySmall" tone="primary" weight="600">Daftar sekarang</Text>
+        </Link>
+      </View>
+
+      <View style={styles.demo}>
+        <Icon name="information-circle-outline" size={16} color={colors.textMuted} />
+        <Text variant="caption" tone="muted">Akun demo: satrio@email.com · sandi 123456</Text>
+      </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  background: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    width: '85%',
-    borderRadius: 24,
-    padding: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  headerContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#e0f2f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#004d40',
-    marginBottom: 5,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-  },
-  formContainer: {
-    width: '100%',
-  },
-  inputContainer: {
+  content: { paddingTop: spacing.xxl },
+  rates: { marginTop: spacing.xxl, marginBottom: spacing.xxxl, gap: spacing.sm },
+  ratesHead: { flexDirection: 'row', justifyContent: 'space-between' },
+  rateRow: { flexDirection: 'row', gap: spacing.sm },
+  rate: { flex: 1, borderRadius: 14, padding: spacing.sm + 2, gap: 6 },
+  field: { marginBottom: spacing.lg },
+  cta: { marginTop: spacing.sm },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.lg },
+  demo: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 15,
-    height: 55,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    color: '#333',
-    fontSize: 16,
-  },
-  loginButton: {
-    backgroundColor: '#00bfa5',
-    borderRadius: 12,
-    height: 55,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 10,
-    shadowColor: '#00bfa5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  registerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 25,
-  },
-  registerText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  registerLink: {
-    color: '#00bfa5',
-    fontSize: 14,
-    fontWeight: 'bold',
+    gap: spacing.sm,
+    marginTop: spacing.xxxl,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
   },
 });

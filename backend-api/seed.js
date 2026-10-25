@@ -1,94 +1,87 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const crypto = require('crypto');
-
-const dbPath = path.resolve(__dirname, 'database.sqlite');
-
-// Delete existing db
 const fs = require('fs');
-if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+const bcrypt = require('bcryptjs');
+const { DB_PATH } = require('./src/config/env');
+const { openDb } = require('./src/db');
+const { createBadgeService } = require('./src/services/badgeService');
 
-const { initDB } = require('./db');
-const db = initDB();
+for (const suffix of ['', '-wal', '-shm']) {
+  if (fs.existsSync(DB_PATH + suffix)) fs.unlinkSync(DB_PATH + suffix);
+}
 
-// Simple hash for demo (not production-grade)
-const hash = (pw) => crypto.createHash('sha256').update(pw).digest('hex');
+const db = openDb(DB_PATH);
+const hash = bcrypt.hashSync('123456', 10);
 
-setTimeout(() => {
-  db.serialize(() => {
-    // Users
-    db.run(`INSERT INTO users (name, email, password, phone, points, total_kg, total_co2, total_donations_rp, total_setor_count, total_donasi_count) VALUES
-      ('Satrio', 'satrio@email.com', '${hash('123456')}', '08123456789', 12450, 156.5, 234.8, 45000, 156, 32)`);
-    db.run(`INSERT INTO users (name, email, password, phone, points, total_kg, total_co2, total_donations_rp, total_setor_count, total_donasi_count) VALUES
-      ('Budi Santoso', 'budi@email.com', '${hash('123456')}', '08234567890', 11200, 140, 210, 38000, 130, 28)`);
-    db.run(`INSERT INTO users (name, email, password, phone, points, total_kg, total_co2, total_donations_rp, total_setor_count, total_donasi_count) VALUES
-      ('Siti Nurhaliza', 'siti@email.com', '${hash('123456')}', '08345678901', 10800, 130, 195, 35000, 120, 25)`);
-    db.run(`INSERT INTO users (name, email, password, phone, points, total_kg, total_co2, total_donations_rp, total_setor_count, total_donasi_count) VALUES
-      ('Ahmad Rizki', 'ahmad@email.com', '${hash('123456')}', '08456789012', 9500, 110, 165, 30000, 100, 20)`);
-    db.run(`INSERT INTO users (name, email, password, phone, points, total_kg, total_co2, total_donations_rp, total_setor_count, total_donasi_count) VALUES
-      ('Dewi Lestari', 'dewi@email.com', '${hash('123456')}', '08567890123', 8900, 100, 150, 28000, 90, 18)`);
+const daysFromNow = (d, hour = 10) => {
+  const date = new Date();
+  date.setDate(date.getDate() + d);
+  date.setHours(hour, 0, 0, 0);
+  return date.toISOString();
+};
+const dateOnly = (d) => daysFromNow(d).slice(0, 10);
 
-    // Couriers
-    db.run(`INSERT INTO couriers (name, email, password, phone) VALUES
-      ('Kurir Andi', 'andi@kurir.com', '${hash('123456')}', '08111222333')`);
-    db.run(`INSERT INTO couriers (name, email, password, phone) VALUES
-      ('Kurir Bima', 'bima@kurir.com', '${hash('123456')}', '08222333444')`);
+db.transaction(() => {
+  const insertUser = db.prepare(`INSERT INTO users (name, email, password, phone, points, total_kg, total_co2,
+    total_donations_rp, total_setor_count, total_donasi_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  [
+    ['Satrio', 'satrio@email.com', '08123456789', 12450, 156.5, 234.75, 45000, 12, 6],
+    ['Budi Santoso', 'budi@email.com', '08234567890', 11200, 140, 210, 38000, 10, 5],
+    ['Siti Nurhaliza', 'siti@email.com', '08345678901', 10800, 130, 195, 35000, 9, 4],
+    ['Ahmad Rizki', 'ahmad@email.com', '08456789012', 9500, 110, 165, 30000, 8, 3],
+    ['Dewi Lestari', 'dewi@email.com', '08567890123', 8900, 100, 150, 28000, 7, 3],
+  ].forEach(([name, email, phone, ...stats]) => insertUser.run(name, email, hash, phone, ...stats));
 
-    // Campaigns (matching design)
-    db.run(`INSERT INTO campaigns (title, description, category, organizer, target_amount, collected_amount, donor_count, image_url, location, deadline, is_urgent, updates) VALUES
-      ('Buku untuk Pesisir', 'Membantu menyediakan buku-buku berkualitas untuk anak-anak di daerah pesisir yang memiliki akses terbatas terhadap pendidikan.', 'Pendidikan', 'Yayasan Literasi Nusantara', 10000000, 8000000, 234, 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=400', 'Pantai Selatan, Jawa Tengah', '2026-05-30', 0, '${JSON.stringify([{date:"2026-04-15",text:"Telah menyalurkan 500 buku ke 3 sekolah"},{date:"2026-04-10",text:"Kampanye telah mencapai 80% dari target!"}])}')`);
+  const insertCourier = db.prepare('INSERT INTO couriers (name, email, password, phone) VALUES (?, ?, ?, ?)');
+  insertCourier.run('Andi Pratama', 'andi@kurir.com', hash, '08111222333');
+  insertCourier.run('Bima Saputra', 'bima@kurir.com', hash, '08222333444');
 
-    db.run(`INSERT INTO campaigns (title, description, category, organizer, target_amount, collected_amount, donor_count, image_url, location, deadline, is_urgent, updates) VALUES
-      ('Tanam 1000 Pohon', 'Program penanaman 1000 pohon untuk menghijaukan kembali lahan kritis di Kalimantan.', 'Lingkungan', 'Green Earth Foundation', 20000000, 15000000, 567, 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=400', 'Kalimantan Timur', '2026-06-15', 0, '[]')`);
-
-    db.run(`INSERT INTO campaigns (title, description, category, organizer, target_amount, collected_amount, donor_count, image_url, location, deadline, is_urgent, updates) VALUES
-      ('Bantuan Banjir Bandung', 'Bantuan darurat untuk korban banjir di wilayah Bandung Selatan.', 'Bencana Alam', 'PMI Bandung', 30000000, 25000000, 1234, 'https://images.unsplash.com/photo-1547683905-f686c993aae5?w=400', 'Bandung Selatan', '2026-05-20', 1, '[]')`);
-
-    db.run(`INSERT INTO campaigns (title, description, category, organizer, target_amount, collected_amount, donor_count, image_url, location, deadline, is_urgent, updates) VALUES
-      ('Panti Asuhan Harapan', 'Membantu kebutuhan sehari-hari anak-anak di Panti Asuhan Harapan.', 'Panti Asuhan', 'Panti Asuhan Harapan', 12000000, 5500000, 189, 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=400', 'Jakarta Timur', '2026-07-01', 0, '[]')`);
-
-    db.run(`INSERT INTO campaigns (title, description, category, organizer, target_amount, collected_amount, donor_count, image_url, location, deadline, is_urgent, updates) VALUES
-      ('Laptop untuk Siswa', 'Menyediakan laptop bekas layak pakai untuk siswa kurang mampu.', 'Pendidikan', 'Tech for Kids', 25000000, 18000000, 421, 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=400', 'Surabaya', '2026-06-30', 0, '[]')`);
-
-    db.run(`INSERT INTO campaigns (title, description, category, organizer, target_amount, collected_amount, donor_count, image_url, location, deadline, is_urgent, updates) VALUES
-      ('Pembersihan Pantai', 'Aksi bersih-bersih pantai dan edukasi masyarakat pesisir tentang pengelolaan sampah.', 'Lingkungan', 'Ocean Care ID', 5000000, 3000000, 98, 'https://images.unsplash.com/photo-1618477461853-cf6ed80faba5?w=400', 'Bali', '2026-08-01', 0, '[]')`);
-
-    // Pickup orders for Satrio (user_id=1)
-    const verifyToken = require('crypto').randomBytes(32).toString('hex');
-    const shortToken = verifyToken.substring(0, 6).toUpperCase();
-    const tokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // +7 days
-    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, verification_token, short_token, token_expires_at, created_at) VALUES
-      (1, 1, 'pending_verification', 'Jl. Sudirman No. 123', '2026-05-18 10:00', '${verifyToken}', '${shortToken}', '${tokenExpires}', '2026-05-17 08:00')`);
-    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, created_at) VALUES
-      (1, NULL, 'waiting', 'Universitas Indonesia', '2026-05-19 09:00', '2026-05-18 07:00')`);
-    db.run(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, scheduled_at, completed_at, created_at) VALUES
-      (1, 1, 'completed', 'Jl. Merdeka No. 45', '2026-05-16 14:00', '2026-05-16 15:30', '2026-05-16 06:00')`);
-
-    // Pickup items
-    db.run(`INSERT INTO pickup_items (order_id, category, estimated_weight, actual_weight) VALUES (1, 'Botol Plastik', 2.5, 2.2)`);
-    db.run(`INSERT INTO pickup_items (order_id, category, estimated_weight, actual_weight) VALUES (1, 'Kertas', 1.5, 1.4)`);
-    db.run(`INSERT INTO pickup_items (order_id, category, estimated_weight, actual_weight) VALUES (1, 'Kaleng', 1.0, 0.8)`);
-    db.run(`INSERT INTO pickup_items (order_id, category, estimated_weight) VALUES (2, 'Botol Kaca', 3.0)`);
-    db.run(`INSERT INTO pickup_items (order_id, category, estimated_weight, actual_weight) VALUES (3, 'Botol Plastik', 2.0, 2.2)`);
-    db.run(`INSERT INTO pickup_items (order_id, category, estimated_weight, actual_weight) VALUES (3, 'Kertas', 1.5, 1.4)`);
-
-    // Transactions for Satrio
-    db.run(`INSERT INTO transactions (user_id, type, title, description, points, created_at) VALUES
-      (1, 'setor', 'Setor Multi Kategori (Verified)', 'Botol Plastik 2.2Kg, Kertas 1.4Kg', 3370, '2026-05-17 10:30')`);
-    db.run(`INSERT INTO transactions (user_id, type, title, description, points, created_at) VALUES
-      (1, 'donasi', 'Donasi ke Panti Asuhan', 'Panti Asuhan Harapan', -5000, '2026-05-16 15:20')`);
-    db.run(`INSERT INTO transactions (user_id, type, title, description, points, created_at) VALUES
-      (1, 'setor', 'Setor Kertas (Verified)', 'Kertas 3.2Kg', 1920, '2026-05-15 09:00')`);
-    db.run(`INSERT INTO transactions (user_id, type, title, description, points, created_at) VALUES
-      (1, 'donasi', 'Donasi ke Buku untuk Pesisir', 'Buku untuk Pesisir', -3000, '2026-05-13 11:00')`);
-    db.run(`INSERT INTO transactions (user_id, type, title, description, points, created_at) VALUES
-      (1, 'setor', 'Setor Kaleng (Verified)', 'Kaleng 1.5Kg', 1500, '2026-05-11 14:00')`);
-
-    // Badges for Satrio
-    db.run(`INSERT INTO badges (user_id, name, tier, icon) VALUES (1, 'Eco Warrior', 'gold', 'leaf')`);
-    db.run(`INSERT INTO badges (user_id, name, tier, icon) VALUES (1, 'Recycling Hero', 'silver', 'refresh')`);
-    db.run(`INSERT INTO badges (user_id, name, tier, icon) VALUES (1, 'Kind Heart', 'bronze', 'heart')`);
-
-    console.log('✅ Database seeded successfully!');
+  const insertCampaign = db.prepare(`INSERT INTO campaigns (title, description, category, organizer, target_amount,
+    collected_amount, donor_count, image_url, location, deadline, is_urgent, updates)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  [
+    ['Buku untuk Pesisir', 'Membantu menyediakan buku-buku berkualitas untuk anak-anak di daerah pesisir yang memiliki akses terbatas terhadap pendidikan.', 'Pendidikan', 'Yayasan Literasi Nusantara', 10000000, 8000000, 234, 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=800', 'Pantai Selatan, Jawa Tengah', dateOnly(40), 0,
+      [{ date: dateOnly(-9), text: 'Telah menyalurkan 500 buku ke 3 sekolah' }, { date: dateOnly(-14), text: 'Kampanye telah mencapai 80% dari target!' }]],
+    ['Tanam 1000 Pohon', 'Program penanaman 1000 pohon untuk menghijaukan kembali lahan kritis di Kalimantan.', 'Lingkungan', 'Green Earth Foundation', 20000000, 15000000, 567, 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=800', 'Kalimantan Timur', dateOnly(55), 0, []],
+    ['Bantuan Banjir Bandung', 'Bantuan darurat untuk korban banjir di wilayah Bandung Selatan.', 'Bencana Alam', 'PMI Bandung', 30000000, 25000000, 1234, 'https://images.unsplash.com/photo-1547683905-f686c993aae5?w=800', 'Bandung Selatan', dateOnly(20), 1, []],
+    ['Panti Asuhan Harapan', 'Membantu kebutuhan sehari-hari anak-anak di Panti Asuhan Harapan.', 'Panti Asuhan', 'Panti Asuhan Harapan', 12000000, 5500000, 189, 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=800', 'Jakarta Timur', dateOnly(70), 0, []],
+    ['Laptop untuk Siswa', 'Menyediakan laptop bekas layak pakai untuk siswa kurang mampu.', 'Pendidikan', 'Tech for Kids', 25000000, 18000000, 421, 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800', 'Surabaya', dateOnly(60), 0, []],
+    ['Pembersihan Pantai', 'Aksi bersih-bersih pantai dan edukasi masyarakat pesisir tentang pengelolaan sampah.', 'Lingkungan', 'Ocean Care ID', 5000000, 3000000, 98, 'https://images.unsplash.com/photo-1618477461853-cf6ed80faba5?w=800', 'Bali', dateOnly(90), 0, []],
+  ].forEach(([...row]) => {
+    const updates = row.pop();
+    insertCampaign.run(...row, JSON.stringify(updates));
   });
-}, 500);
+
+  const insertOrder = db.prepare(`INSERT INTO pickup_orders (user_id, courier_id, status, pickup_address, pickup_lat,
+    pickup_lng, scheduled_at, accepted_at, arrived_at, completed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const insertItem = db.prepare(
+    'INSERT INTO pickup_items (order_id, category, estimated_weight, actual_weight) VALUES (?, ?, ?, ?)',
+  );
+
+  // 1: menunggu kurir
+  let o = insertOrder.run(1, null, 'waiting', 'Universitas Indonesia, Depok', -6.3621, 106.8271, daysFromNow(1, 9), null, null, null, daysFromNow(0, 7)).lastInsertRowid;
+  insertItem.run(o, 'Botol Kaca', 3, null);
+  insertItem.run(o, 'Kertas', 2, null);
+  // 2: kurir menuju lokasi
+  o = insertOrder.run(1, 1, 'on_the_way', 'Jl. Sudirman No. 123, Jakarta Pusat', -6.2088, 106.8227, daysFromNow(0, 14), daysFromNow(0, 8), null, null, daysFromNow(-1, 8)).lastInsertRowid;
+  insertItem.run(o, 'Botol Plastik', 2.5, null);
+  insertItem.run(o, 'Kaleng', 1, null);
+  // 3: kurir sudah tiba (siap ditimbang)
+  o = insertOrder.run(2, 2, 'arrived', 'Jl. Margonda Raya No. 10, Depok', -6.3728, 106.8346, daysFromNow(0, 11), daysFromNow(0, 9), daysFromNow(0, 10), null, daysFromNow(-1, 9)).lastInsertRowid;
+  insertItem.run(o, 'Kertas', 4, null);
+  // 4: selesai
+  o = insertOrder.run(1, 1, 'completed', 'Jl. Merdeka No. 45, Bandung', -6.9147, 107.6098, daysFromNow(-3, 14), daysFromNow(-3, 12), daysFromNow(-3, 14), daysFromNow(-3, 15), daysFromNow(-4, 6)).lastInsertRowid;
+  insertItem.run(o, 'Botol Plastik', 2, 2.2);
+  insertItem.run(o, 'Kertas', 1.5, 1.4);
+
+  const insertTrx = db.prepare(`INSERT INTO transactions (user_id, type, title, description, points, ref_type, ref_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  insertTrx.run(1, 'setor', `Setor Sampah #${o}`, 'Botol Plastik 2.2 kg, Kertas 1.4 kg', 2600, 'pickup', o, daysFromNow(-3, 15));
+  insertTrx.run(1, 'donasi', 'Donasi ke Panti Asuhan Harapan', 'Panti Asuhan Harapan', -5000, 'donation', null, daysFromNow(-4, 15));
+  insertTrx.run(1, 'setor', 'Setor Sampah Kaleng', 'Kaleng 3 kg', 3000, 'pickup', null, daysFromNow(-6, 10));
+})();
+
+const badges = createBadgeService({ db, notifier: null });
+for (const { id } of db.prepare('SELECT id FROM users').all()) badges.evaluate(id);
+
+console.log(`Database berhasil dibuat di ${DB_PATH}`);
+console.log('Akun demo (sandi 123456): satrio@email.com, budi@email.com, andi@kurir.com, bima@kurir.com');
+db.close();
